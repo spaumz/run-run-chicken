@@ -18,7 +18,7 @@
             overflow: hidden;
             margin: 0 auto;
         }
-        #menu, #game-over, #pause-screen, #level-complete {
+        #menu, #game-over, #pause-screen {
             position: absolute;
             top: 50%;
             left: 50%;
@@ -30,7 +30,7 @@
             text-align: center;
             z-index: 10;
         }
-        #game-over, #pause-screen, #level-complete {
+        #game-over, #pause-screen {
             display: none;
         }
         button {
@@ -45,7 +45,7 @@
             cursor: pointer;
             border-radius: 5px;
         }
-        #ui, #health-container, #level-container, #power-up-indicator {
+        #ui, #health-container, #level-container {
             position: absolute;
             background: rgba(0, 0, 0, 0.6);
             color: white;
@@ -66,10 +66,6 @@
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-        }
-        #power-up-indicator {
-            bottom: 20px;
-            right: 20px;
         }
         #health-bar {
             width: 200px;
@@ -95,6 +91,8 @@
             display: none;
         }
     </style>
+    <!-- Charger Three.js depuis CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
 </head>
 <body>
     <div id="game-container">
@@ -122,11 +120,6 @@
             <span id="level-indicator">1</span>
         </div>
         
-        <div id="power-up-indicator">
-            <span id="power-up-icon">⚡</span>
-            <span id="power-up-time">10</span>
-        </div>
-        
         <div id="game-over">
             <h1>GAME OVER</h1>
             <p>Score final: <span id="final-score">0</span></p>
@@ -139,16 +132,11 @@
             <p>Appuyez sur P pour continuer</p>
         </div>
         
-        <div id="level-complete">
-            <h1>NIVEAU TERMINÉ!</h1>
-            <p>Préparez-vous pour le niveau <span id="next-level">2</span></p>
-        </div>
-        
         <div id="controls-info">
             <p>Souris = Déplacer | Clic = Tirer | P = Pause</p>
         </div>
     </div>
 
-    <script type="module" src="game.js"></script>
+    <script src="game.js"></script>
 </body>
 </html>
