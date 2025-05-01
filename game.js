@@ -715,7 +715,7 @@ function createBoss(level = 1) {
     leftHorn.position.set(-size * 0.4, size * 1.5, size * 0.2);
     leftHorn.rotation.x = -Math.PI / 6;
     leftHorn.rotation.z = -Math.PI / 6;
-    bossGroup.
+    bossGroup.add(rightHorn);
         // Health bar above boss
     const healthBarGeometry = new THREE.BoxGeometry(size * 2, size * 0.2, size * 0.1);
     const healthBarMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
