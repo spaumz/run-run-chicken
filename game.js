@@ -1,8 +1,5 @@
 const THREE = window.THREE;
 
-// Import Three.js
-<script src="https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.min.js"></script>
-
 // Game variables
 let scene, camera, renderer, player;
 let gameStarted = false;
