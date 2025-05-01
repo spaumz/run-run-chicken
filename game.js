@@ -19,8 +19,20 @@ let mouseCursor;
 let roadSegments = [];
 let waterLeft, waterRight;
 let particles = [];
+let enemies = [];
+let bullets = [];
+let powerUps = [];
+let bosses = [];
+let currentLevel = 1;
+let isShooting = false;
+let shootingCooldown = 0;
+let isInvincible = false;
+let invincibilityTime = 0;
+let powerUpTime = 0;
+let hasPowerUp = false;
+let playerHealth = 100;
 
-// Max troop visualization - Increased as requested
+// Max troop visualization
 const MAX_TROOPS_DISPLAYED = 30;
 
 // Colors for evolved troops
@@ -46,6 +58,9 @@ const scoreCount = document.getElementById("score-count");
 const fusionRateElement = document.getElementById("fusion-rate");
 const finalScore = document.getElementById("final-score");
 const finalFusionRate = document.getElementById("final-fusion-rate");
+const healthBar = document.getElementById("health-bar");
+const healthBarInner = document.getElementById("health-bar-inner");
+const levelIndicator = document.getElementById("level-indicator");
 
 // Set up event listeners
 startButton.addEventListener("click", startGame);
@@ -57,6 +72,7 @@ function init() {
     // Create scene
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
+    scene.fog = new THREE.Fog(0x87CEEB, 50, 100); // Add fog for depth
     
     // Create camera - Adjusted to be more top-down
     camera = new THREE.PerspectiveCamera(
@@ -84,7 +100,22 @@ function init() {
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 1024;
     directionalLight.shadow.mapSize.height = 1024;
+    directionalLight.shadow.camera.far = 50;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
     scene.add(directionalLight);
+    
+    // Add spotlight for dramatic effect
+    const spotlight = new THREE.SpotLight(0xffffff, 1);
+    spotlight.position.set(0, 30, 10);
+    spotlight.angle = Math.PI / 6;
+    spotlight.penumbra = 0.3;
+    spotlight.castShadow = true;
+    spotlight.shadow.mapSize.width = 1024;
+    spotlight.shadow.mapSize.height = 1024;
+    scene.add(spotlight);
     
     // Create water surfaces on both sides of the road
     createWaterSurfaces();
@@ -119,6 +150,10 @@ function init() {
     
     // Add mouse controls
     gameContainer.addEventListener("mousemove", handleMouseMove);
+    gameContainer.addEventListener("mousedown", startShooting);
+    gameContainer.addEventListener("mouseup", stopShooting);
+    gameContainer.addEventListener("touchstart", startShooting);
+    gameContainer.addEventListener("touchend", stopShooting);
     
     // Add initial troop
     updateTroops();
@@ -151,6 +186,42 @@ function createWaterSurfaces() {
     waterRight.position.set(60, -1, 0);
     waterRight.receiveShadow = true;
     scene.add(waterRight);
+    
+    // Add some decorative objects in the water
+    addWaterDecorations();
+}
+
+// Add decorative objects to the water
+function addWaterDecorations() {
+    // Add rocks
+    for (let i = 0; i < 20; i++) {
+        const rockSize = Math.random() * 2 + 1;
+        const rockGeometry = new THREE.DodecahedronGeometry(rockSize, 1);
+        const rockMaterial = new THREE.MeshPhongMaterial({
+            color: 0x888888,
+            flatShading: true
+        });
+        
+        const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+        
+        // Position randomly in water
+        const side = Math.random() > 0.5 ? 1 : -1;
+        rock.position.set(
+            (side * 20) + (side * Math.random() * 30),
+            rockSize / 2 - 1,
+            Math.random() * 80 - 40
+        );
+        
+        rock.rotation.set(
+            Math.random() * Math.PI,
+            Math.random() * Math.PI,
+            Math.random() * Math.PI
+        );
+        
+        rock.castShadow = true;
+        rock.receiveShadow = true;
+        scene.add(rock);
+    }
 }
 
 // Create road segments for scrolling effect
@@ -164,7 +235,9 @@ function createRoadSegments() {
         const roadTexture = createRoadTexture();
         const roadMaterial = new THREE.MeshPhongMaterial({
             map: roadTexture,
-            color: 0xaaaaaa
+            color: 0xaaaaaa,
+            bumpMap: roadTexture,
+            bumpScale: 0.1
         });
         
         const segment = new THREE.Mesh(
@@ -187,13 +260,22 @@ function createRoadTexture() {
     const ctx = canvas.getContext("2d");
     
     // Road background
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = "#444444";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Lane markings (3 lanes)
+    // Add asphalt texture
+    ctx.fillStyle = "#3a3a3a";
+    for (let i = 0; i < 5000; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 3 + 1;
+        ctx.fillRect(x, y, size, size);
+    }
+    
+    // Lane markings (3 lanes) - Make them wider and more visible
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([20, 20]);
+    ctx.lineWidth = 12; // Wider lanes
+    ctx.setLineDash([40, 20]); // Longer dashes
     
     // Left lane divider
     ctx.beginPath();
@@ -207,14 +289,22 @@ function createRoadTexture() {
     ctx.lineTo(canvas.width * 2 / 3, canvas.height);
     ctx.stroke();
     
-    // Add some texture to the road
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-    for (let i = 0; i < 100; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const size = Math.random() * 5 + 1;
-        ctx.fillRect(x, y, size, size);
-    }
+    // Edge markings - solid white lines
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 10;
+    ctx.setLineDash([]);
+    
+    // Left edge
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(10, canvas.height);
+    ctx.stroke();
+    
+    // Right edge
+    ctx.beginPath();
+    ctx.moveTo(canvas.width - 10, 0);
+    ctx.lineTo(canvas.width - 10, canvas.height);
+    ctx.stroke();
     
     return new THREE.CanvasTexture(canvas);
 }
@@ -224,15 +314,28 @@ function createMouseCursor() {
     const cursorGeometry = new THREE.RingGeometry(0.1, 0.2, 16);
     const cursorMaterial = new THREE.MeshBasicMaterial({ 
         color: 0xffffff,
-        side: THREE.DoubleSide
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.7
     });
     mouseCursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
     mouseCursor.rotation.x = Math.PI / 2;
     mouseCursor.position.set(0, 0.5, 5);
     scene.add(mouseCursor);
+    
+    // Add inner cursor
+    const innerCursorGeometry = new THREE.CircleGeometry(0.05, 16);
+    const innerCursorMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0xff0000,
+        side: THREE.DoubleSide
+    });
+    const innerCursor = new THREE.Mesh(innerCursorGeometry, innerCursorMaterial);
+    innerCursor.rotation.x = Math.PI / 2;
+    innerCursor.position.z = 0.01;
+    mouseCursor.add(innerCursor);
 }
 
-// Create text texture for door labels - Updated to match the reference image
+// Create text texture for door labels
 function createTextTexture(text, backgroundColor, isPositive) {
     const canvas = document.createElement("canvas");
     canvas.width = 256;
@@ -240,7 +343,7 @@ function createTextTexture(text, backgroundColor, isPositive) {
     
     const ctx = canvas.getContext("2d");
     
-    // Background color (blue for multiplication, etc.)
+    // Background color
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
@@ -266,6 +369,58 @@ function createTextTexture(text, backgroundColor, isPositive) {
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    
+    // Add additional visual elements based on type
+    if (isPositive) {
+        // Add a glow or stars for positive effects
+        for (let i = 0; i < 5; i++) {
+            const starSize = 20;
+            const starX = Math.random() * (canvas.width - starSize * 2) + starSize;
+            const starY = Math.random() * (canvas.height - starSize * 2) + starSize;
+            
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            for (let j = 0; j < 5; j++) {
+                const angle = j * 2 * Math.PI / 5 - Math.PI / 2;
+                const x = starX + Math.cos(angle) * starSize;
+                const y = starY + Math.sin(angle) * starSize;
+                if (j === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                const innerAngle = (j * 2 * Math.PI / 5) + (Math.PI / 5) - Math.PI / 2;
+                const innerX = starX + Math.cos(innerAngle) * (starSize / 2.5);
+                const innerY = starY + Math.sin(innerAngle) * (starSize / 2.5);
+                ctx.lineTo(innerX, innerY);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+    } else {
+        // Add warning symbols for negative effects
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 5;
+        
+        for (let i = 0; i < 3; i++) {
+            const x = 30 + i * 80;
+            const y = canvas.height - 30;
+            const size = 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(x, y - size);
+            ctx.lineTo(x + size, y + size);
+            ctx.lineTo(x - size, y + size);
+            ctx.closePath();
+            ctx.stroke();
+            
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(x, y - size/2, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
     
     return new THREE.CanvasTexture(canvas);
 }
@@ -386,6 +541,14 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         cape.position.set(0, 0.6 * sizeMultiplier, -0.3 * sizeMultiplier);
         cape.rotation.x = Math.PI / 8;
         troopGroup.add(cape);
+        
+        // Add weapons for highest level
+        const weaponGeometry = new THREE.BoxGeometry(0.05 * sizeMultiplier, 0.05 * sizeMultiplier, 0.4 * sizeMultiplier);
+        const weaponMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa, metalness: 0.8 });
+        
+        const weapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
+        weapon.position.set(0.2 * sizeMultiplier, 0.4 * sizeMultiplier, 0.3 * sizeMultiplier);
+        troopGroup.add(weapon);
     }
     
     // Set position
@@ -398,577 +561,319 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     return troopGroup;
 }
 
-// Create particle effect for collisions
-function createParticleEffect(position, color) {
-    const particleCount = 15;
-    const particleGroup = new THREE.Group();
+// Create enemy
+function createEnemy(type = "basic", position = { x: 0, z: -50 }) {
+    const enemyGroup = new THREE.Group();
     
-    for (let i = 0; i < particleCount; i++) {
-        const particle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 8, 8),
-            new THREE.MeshBasicMaterial({ color: color })
-        );
-        
-        // Random position offset
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 0.2 + Math.random() * 0.5;
-        particle.position.set(
-            Math.cos(angle) * radius,
-            0.5 + Math.random() * 1,
-            Math.sin(angle) * radius
-        );
-        
-        // Random velocity
-        particle.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.2,
-            0.1 + Math.random() * 0.2,
-            (Math.random() - 0.5) * 0.2
-        );
-        
-        // Life time in frames
-        particle.life = 30 + Math.floor(Math.random() * 20);
-        particle.maxLife = particle.life;
-        
-        particleGroup.add(particle);
-    }
+    let color, size, health;
     
-    particleGroup.position.copy(position);
-    scene.add(particleGroup);
-    particles.push(particleGroup);
-    
-    return particleGroup;
-}
-
-// Update particles
-function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const particleGroup = particles[i];
-        let allDead = true;
-        
-        for (let j = 0; j < particleGroup.children.length; j++) {
-            const particle = particleGroup.children[j];
-            
-            // Update position
-            particle.position.add(particle.velocity);
-            
-            // Apply gravity
-            particle.velocity.y -= 0.01;
-            
-            // Update life
-            particle.life--;
-            
-            // Fade out
-            if (particle.material) {
-                particle.material.opacity = particle.life / particle.maxLife;
-                particle.material.transparent = true;
-            }
-            
-            if (particle.life > 0) {
-                allDead = false;
-            }
-        }
-        
-        // Remove dead particle group
-        if (allDead) {
-            scene.remove(particleGroup);
-            particles.splice(i, 1);
-        }
-    }
-}
-
-// Update troops visualization
-function updateTroops() {
-    // Remove all existing troops
-    for (let i = 0; i < troopMeshes.length; i++) {
-        scene.remove(troopMeshes[i]);
-    }
-    troopMeshes = [];
-    
-    // Reset player
-    player = null;
-    
-    // Count how many troops of each level we need
-    let remainingTroops = troops;
-    let troopCounts = [0, 0, 0, 0, 0]; // Level 1-5
-    
-    // Calculate troop distribution using fusion rate
-    while (remainingTroops > 0) {
-        if (remainingTroops >= 100 * fusionRate) {
-            troopCounts[4]++;
-            remainingTroops -= 100 * fusionRate;
-        } else if (remainingTroops >= 50 * fusionRate) {
-            troopCounts[3]++;
-            remainingTroops -= 50 * fusionRate;
-        } else if (remainingTroops >= 10 * fusionRate) {
-            troopCounts[2]++;
-            remainingTroops -= 10 * fusionRate;
-        } else if (remainingTroops >= 5 * fusionRate) {
-            troopCounts[1]++;
-            remainingTroops -= 5 * fusionRate;
-        } else {
-            // Always have at least one basic troop
-            troopCounts[0] = Math.max(1, Math.min(remainingTroops, 5)); 
-            remainingTroops = 0;
-        }
-        
-        // Limit total visualized troops
-        if (troopMeshes.length + troopCounts.reduce((a, b) => a + b, 0) > MAX_TROOPS_DISPLAYED) {
+    switch (type) {
+        case "advanced":
+            color = 0xff0000;
+            size = 1.2;
+            health = 3;
             break;
-        }
+        case "elite":
+            color = 0x9900ff;
+            size = 1.5;
+            health = 5;
+            break;
+        default: // basic
+            color = 0x666666;
+            size = 1;
+            health = 1;
     }
     
-    // Create troops of each level in formation
-    let xPos = -6;
-    let zPos = 0;
+    // Enemy body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(size, size, size),
+        new THREE.MeshPhongMaterial({ 
+            color: color,
+            shininess: 50
+        })
+    );
+    body.position.y = 0.5 * size;
+    body.castShadow = true;
+    enemyGroup.add(body);
     
-    // Create highest level troops first (bigger ones in back)
-    for (let level = 4; level >= 0; level--) {
-        const count = troopCounts[level];
-        for (let i = 0; i < count && troopMeshes.length < MAX_TROOPS_DISPLAYED; i++) {
-            const troop = createTroopMesh(level, { x: xPos, z: zPos });
-            troopMeshes.push(troop);
-            
-            // Set the first troop as player
-            if (!player) player = troop;
-            
-            // Update position for next troop
-            xPos += 1.5;
-            if (xPos > 6) {
-                xPos = -6;
-                zPos -= 1.5;
-            }
-        }
-    }
-    
-    // If no troops were created, create at least one
-    if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: 0 });
-        troopMeshes.push(troop);
-        player = troop;
-    }
-}
-
-// Create door multiplier - Updated to match the reference image
-function createMultiplier() {
-    // Define multiplier types
-    const types = [
-        { op: "+", color: 0x00cc44, min: 1, max: 5 },  // Addition (green)
-        { op: "-", color: 0xcc0000, min: 1, max: 3 },  // Subtraction (red)
-        { op: "×", color: 0x00aaff, min: 2, max: 5 },  // Multiplication (blue)
-        { op: "÷", color: 0xffcc00, min: 2, max: 3 }   // Division (yellow)
-    ];
-    
-    // Randomly select type
-    const typeIndex = Math.floor(Math.random() * types.length);
-    const type = types[typeIndex];
-    
-    // Generate value
-    const value = Math.floor(Math.random() * (type.max - type.min + 1)) + type.min;
-    
-    // Create door group
-    const doorGroup = new THREE.Group();
-    
-    // Get color hex as string
-    const colorHex = "#" + type.color.toString(16).padStart(6, "0");
-    const isPositive = (type.op === "+" || type.op === "×");
-    
-    // New door design - based on the image
-    // Create an outline frame first
-    const outlineGeometry = new THREE.BoxGeometry(4.2, 6.2, 0.6);
-    const outlineMaterial = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
+    // Eye visor
+    const visorGeometry = new THREE.BoxGeometry(size * 1.1, size * 0.2, size * 0.1);
+    const visorMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x00aaff,
+        emissive: 0x0044aa,
+        shininess: 90,
         transparent: true,
         opacity: 0.9
     });
-    const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
-    outline.position.y = 3;
-    outline.castShadow = true;
-    doorGroup.add(outline);
     
-    // Main door frame
-    const frameGeometry = new THREE.BoxGeometry(4, 6, 0.5);
-    const frameMaterial = new THREE.MeshPhongMaterial({ 
-        color: type.color,
-        transparent: true,
-        opacity: 0.9,
+    const visor = new THREE.Mesh(visorGeometry, visorMaterial);
+    visor.position.set(0, size * 0.6, size * 0.55);
+    enemyGroup.add(visor);
+    
+    // Shoulder spikes for advanced enemies
+    if (type !== "basic") {
+        const spikeGeometry = new THREE.ConeGeometry(size * 0.2, size * 0.5, 4);
+        const spikeMaterial = new THREE.MeshPhongMaterial({ color: 0xaaaaaa });
+        
+        const leftSpike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+        leftSpike.position.set(-size * 0.6, size * 0.8, 0);
+        leftSpike.rotation.z = Math.PI / 4;
+        enemyGroup.add(leftSpike);
+        
+        const rightSpike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+        rightSpike.position.set(size * 0.6, size * 0.8, 0);
+        rightSpike.rotation.z = -Math.PI / 4;
+        enemyGroup.add(rightSpike);
+    }
+    
+    // Additional features for elite enemies
+    if (type === "elite") {
+        // Crown
+        const crownGeometry = new THREE.CylinderGeometry(size * 0.3, size * 0.4, size * 0.2, 8);
+        const crownMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xffcc00,
+            metalness: 0.7,
+            roughness: 0.3
+        });
+        
+        const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+        crown.position.set(0, size * 1.2, 0);
+        enemyGroup.add(crown);
+        
+        // Crown spikes
+        for (let i = 0; i < 4; i++) {
+            const spikeGeometry = new THREE.ConeGeometry(size * 0.1, size * 0.3, 4);
+            const spike = new THREE.Mesh(spikeGeometry, crownMaterial);
+            
+            const angle = i * Math.PI / 2;
+            spike.position.set(
+                Math.cos(angle) * size * 0.35,
+                size * 1.35,
+                Math.sin(angle) * size * 0.35
+            );
+            spike.rotation.x = Math.PI / 2;
+            enemyGroup.add(spike);
+        }
+    }
+    
+    // Set position
+    enemyGroup.position.set(position.x, 0, position.z);
+    
+    // Add custom properties
+    enemyGroup.health = health;
+    enemyGroup.type = type;
+    enemyGroup.value = type === "elite" ? 50 : (type === "advanced" ? 20 : 10);
+    enemyGroup.speed = type === "elite" ? 0.12 : (type === "advanced" ? 0.15 : 0.18);
+    
+    // Add to scene and enemies array
+    scene.add(enemyGroup);
+    enemies.push(enemyGroup);
+    
+    return enemyGroup;
+}
+
+// Create boss
+function createBoss(level = 1) {
+    const bossGroup = new THREE.Group();
+    
+    // Boss size and health based on level
+    const size = 2.5 + (level * 0.5);
+    const health = 20 + (level * 10);
+    
+    // Boss body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(size * 1.2, size, size * 1.5),
+        new THREE.MeshPhongMaterial({ 
+            color: 0x990000,
+            shininess: 70
+        })
+    );
+    body.position.y = size / 2;
+    body.castShadow = true;
+    bossGroup.add(body);
+    
+    // Boss head
+    const head = new THREE.Mesh(
+        new THREE.BoxGeometry(size * 0.8, size * 0.8, size * 0.8),
+        new THREE.MeshPhongMaterial({ 
+            color: 0xaa0000,
+            shininess: 70
+        })
+    );
+    head.position.set(0, size * 1.1, size * 0.4);
+    head.castShadow = true;
+    bossGroup.add(head);
+    
+    // Horns
+    const hornGeometry = new THREE.ConeGeometry(size * 0.2, size * 0.6, 8);
+    const hornMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x666666,
+        metalness: 0.7
+    });
+    
+    const leftHorn = new THREE.Mesh(hornGeometry, hornMaterial);
+    leftHorn.position.set(-size * 0.4, size * 1.5, size * 0.2);
+    leftHorn.rotation.x = -Math.PI / 6;
+    leftHorn.rotation.z = -Math.PI / 6;
+    bossGroup.add(leftHorn);
+    
+    const rightHorn = new THREE.Mesh(hornGeometry, hornMaterial);
+    rightHorn.position.set(size * 0.4, size * 1.5, size * 0.2);
+    rightHorn.rotation.x = -Math.PI / 6;
+    rightHorn.rotation.z = Math.PI / 6;
+    bossGroup.add(rightHorn);
+    
+    // Eyes (glowing)
+    const eyeGeometry = new THREE.SphereGeometry(size * 0.15, 16, 16);
+    const eyeMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xff0000,
+        emissive: 0xff0000,
+        emissiveIntensity: 1,
+        shininess: 100
+    });
+    
+    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    leftEye.position.set(-size * 0.25, size * 1.2, size * 0.7);
+    bossGroup.add(leftEye);
+    
+    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    rightEye.position.set(size * 0.25, size * 1.2, size * 0.7);
+    bossGroup.add(rightEye);
+    
+    // Jaw/Mouth
+    const jawGeometry = new THREE.BoxGeometry(size * 0.7, size * 0.3, size * 0.6);
+    const jawMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x990000,
+        shininess: 50
+    });
+    
+    const jaw = new THREE.Mesh(jawGeometry, jawMaterial);
+    jaw.position.set(0, size * 0.8, size * 0.5);
+    bossGroup.add(jaw);
+    
+    // Teeth
+    const teethGeometry = new THREE.BoxGeometry(size * 0.1, size * 0.1, size * 0.1);
+    const teethMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xeeeeee,
+        shininess: 100
+    });
+    
+    for (let i = 0; i < 5; i++) {
+        const tooth = new THREE.Mesh(teethGeometry, teethMaterial);
+        tooth.position.set(
+            (i - 2) * size * 0.15,
+            size * 0.95,
+            size * 0.8
+        );
+        bossGroup.add(tooth);
+    }
+    
+    // Armor plates
+    const plateGeometry = new THREE.BoxGeometry(size * 0.4, size * 0.4, size * 0.1);
+    const plateMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x333333,
+        metalness: 0.8,
         shininess: 90
     });
-    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-    frame.position.y = 3;
-    frame.castShadow = true;
-    doorGroup.add(frame);
     
-    // Door opening - slightly transparent
-    const openingGeometry = new THREE.BoxGeometry(3.5, 5.5, 0.6);
-    const openingMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-    });
-    const opening = new THREE.Mesh(openingGeometry, openingMaterial);
-    opening.position.y = 3;
-    opening.position.z = 0.1;
-    doorGroup.add(opening);
-    
-    // Create sign with multiplier text
-    const textTexture = createTextTexture(type.op + value, colorHex, isPositive);
-    const signMaterial = new THREE.MeshBasicMaterial({
-        map: textTexture,
-        transparent: true,
-        opacity: 0.95
-    });
-    
-    const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(3, 3),
-        signMaterial
-    );
-    sign.position.set(0, 3, 0.3);
-    doorGroup.add(sign);
-    
-    // Add a glow effect around the door
-    const glowGeometry = new THREE.TorusGeometry(2.5, 0.15, 16, 32);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.7
-    });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.set(0, 3, 0.3);
-    glow.rotation.x = Math.PI / 2;
-    doorGroup.add(glow);
-    
-    // Add another inner glow with the door's color
-    const innerGlowGeometry = new THREE.TorusGeometry(2.3, 0.1, 16, 32);
-    const innerGlowMaterial = new THREE.MeshBasicMaterial({
-        color: type.color,
-        transparent: true,
-        opacity: 0.8
-    });
-    const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
-    innerGlow.position.set(0, 3, 0.35);
-    innerGlow.rotation.x = Math.PI / 2;
-    doorGroup.add(innerGlow);
-    
-    // Set random position on x-axis (wider range for 3-lane road)
-    const x = Math.random() * 16 - 8; // Between -8 and 8
-    doorGroup.position.set(x, 0, -60);
-    
-    // Add to scene and multipliers array
-    scene.add(doorGroup);
-    
-    // Different effects based on operator
-    let effect;
-    if (type.op === "+") {
-        effect = t => t + value;
-    } else if (type.op === "-") {
-        effect = t => Math.max(0, t - value);
-    } else if (type.op === "×") {
-        effect = t => t * value;
-    } else if (type.op === "÷") {
-        effect = t => Math.max(1, Math.floor(t / value));
-    }
-    
-    // Store multiplier info
-    multipliers.push({
-        mesh: doorGroup,
-        type: type.op,
-        value: value,
-        effect: effect,
-        color: type.color
-    });
-    
-    return doorGroup;
-}
-
-// Window resize handler
-function onWindowResize() {
-    camera.aspect = gameContainer.clientWidth / gameContainer.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
-}
-
-// Mouse controls
-function handleMouseMove(event) {
-    if (gamePaused) return;
-    
-    // Calculate mouse position relative to container
-    const rect = gameContainer.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / gameContainer.clientWidth) * 2 - 1;
-    
-    // Convert to world coordinates (wider range for 3-lane road)
-    targetPlayerX = mouseX * 8;
-    
-    // Update cursor position
-    if (mouseCursor) {
-        mouseCursor.position.x = targetPlayerX;
-    }
-}
-
-// Keyboard controls for pause
-function handleKeyDown(event) {
-    // Handle pause toggle with "P" key
-    if (event.key === "p" || event.key === "P") {
-        if (gameStarted && !gameOver) {
-            gamePaused = !gamePaused;
-            pauseScreenElement.style.display = gamePaused ? "block" : "none";
+    // Add plates to chest
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 2; j++) {
+            const plate = new THREE.Mesh(plateGeometry, plateMaterial);
+            plate.position.set(
+                (j === 0 ? -1 : 1) * size * 0.3,
+                size * 0.5 - i * size * 0.4,
+                size * 0.8
+            );
+            bossGroup.add(plate);
         }
     }
-}
-
-// Start game
-function startGame() {
-    gameStarted = true;
-    menu.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    updateUI();
-}
-
-// Restart game
-function restartGame() {
-    // Reset game state
-    gameOver = false;
-    gamePaused = false;
-    troops = 1;
-    score = 0;
-    fusionRate = 1;
-    timeElapsed = 0;
-    lastSpawnTime = 0;
-    targetPlayerX = 0;
     
-    // Remove all multipliers
-    for (let i = 0; i < multipliers.length; i++) {
-        scene.remove(multipliers[i].mesh);
-    }
-    multipliers = [];
-    
-    // Remove all particles
-    for (let i = 0; i < particles.length; i++) {
-        scene.remove(particles[i]);
-    }
-    particles = [];
-    
-    // Reset troops
-    updateTroops();
-    
-    // Hide game over, show UI
-    gameOverScreen.style.display = "none";
-    pauseScreenElement.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    
-    updateUI();
-}
-
-// Update UI
-function updateUI() {
-    troopsCount.textContent = troops;
-    scoreCount.textContent = score;
-    fusionRateElement.textContent = fusionRate;
-    finalScore.textContent = score;
-    finalFusionRate.textContent = fusionRate;
-}
-
-// Check for game over
-function checkGameOver() {
-    if (troops <= 0 && !gameOver) {
-        gameOver = true;
-        ui.style.display = "none";
-        controlsInfo.style.display = "none";
-        gameOverScreen.style.display = "block";
-        updateUI();
-    }
-}
-
-// Animation loop
-function animate(time) {
-    requestAnimationFrame(animate);
-    
-    // Skip updates if paused
-    if (gamePaused) {
-        renderer.render(scene, camera);
-        return;
+    // Add special features based on boss level
+    if (level >= 2) {
+        // Shoulder spikes
+        const spikeGeometry = new THREE.ConeGeometry(size * 0.2, size * 0.7, 6);
+        const spikeMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x880000,
+            shininess: 70
+        });
+        
+        const leftSpike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+        leftSpike.position.set(-size * 0.7, size * 0.8, 0);
+        leftSpike.rotation.z = Math.PI / 3;
+        bossGroup.add(leftSpike);
+        
+        const rightSpike = new THREE.Mesh(spikeGeometry, spikeMaterial);
+        rightSpike.position.set(size * 0.7, size * 0.8, 0);
+        rightSpike.rotation.z = -Math.PI / 3;
+        bossGroup.add(rightSpike);
     }
     
-    if (gameStarted && !gameOver) {
-        // Convert time to seconds
-        const now = time * 0.001;
-        const deltaTime = now - timeElapsed;
-        timeElapsed = now;
-        
-        // Smooth player movement (lerp)
-        if (player) {
-            // Gradually move towards target position
-            player.position.x += (targetPlayerX - player.position.x) * 0.05;
+    if (level >= 3) {
+        // Back spikes
+        for (let i = 0; i < 4; i++) {
+            const spikeGeometry = new THREE.ConeGeometry(size * 0.15, size * 0.5, 6);
+            const spike = new THREE.Mesh(spikeGeometry, hornMaterial);
             
-            // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-9, Math.min(9, player.position.x));
-            
-            // Move all troops to follow the leader in formation
-            for (let i = 1; i < troopMeshes.length; i++) {
-                const troop = troopMeshes[i];
-                
-                // Calculate positions in a grid pattern
-                const row = Math.floor(i / 5);
-                const col = i % 5;
-                
-                // Position offset from leader
-                const offsetX = (col - 2) * 1.5;
-                const offsetZ = -row * 1.5;
-                
-                // Target position
-                const targetX = player.position.x + offsetX;
-                const targetZ = player.position.z + offsetZ;
-                
-                // Smoother movement for followers
-                troop.position.x += (targetX - troop.position.x) * 0.05;
-                troop.position.z += (targetZ - troop.position.z) * 0.05;
-                
-                // Add chicken waddle animation
-                troop.position.y = Math.sin(now * 8 + i) * 0.1;
-                
-                // Wing flapping for random chickens
-                if (troop.children[5]) { // Left wing
-                    troop.children[5].rotation.z = Math.sin(now * 10 + i) * 0.2;
-                }
-                if (troop.children[6]) { // Right wing
-                    troop.children[6].rotation.z = -Math.sin(now * 10 + i) * 0.2;
-                }
-            }
-            
-            // Add chicken waddle animation to leader too
-            player.position.y = Math.sin(now * 8) * 0.1;
-            
-            // Wing flapping for leader
-            if (player.children[5]) { // Left wing
-                player.children[5].rotation.z = Math.sin(now * 10) * 0.2;
-            }
-            if (player.children[6]) { // Right wing
-                player.children[6].rotation.z = -Math.sin(now * 10) * 0.2;
-            }
+            spike.position.set(
+                (i % 2 === 0 ? -1 : 1) * size * 0.3,
+                size * 0.7 - Math.floor(i/2) * size * 0.4,
+                -size * 0.5
+            );
+            spike.rotation.x = Math.PI / 2;
+            bossGroup.add(spike);
         }
         
-        // Spawn multipliers
-        if (now - lastSpawnTime > multiplierSpawnRate) {
-            lastSpawnTime = now;
-            createMultiplier();
-            
-            // Increase spawn rate with score
-            multiplierSpawnRate = Math.max(0.8, 2 - (score / 1000));
-        }
+        // Weapon
+        const weaponGeometry = new THREE.BoxGeometry(size * 0.2, size * 0.2, size * 2);
+        const weaponMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x444444,
+            metalness: 0.9,
+            shininess: 100
+        });
         
-        // Update multipliers
-        for (let i = multipliers.length - 1; i >= 0; i--) {
-            const multiplier = multipliers[i];
-            
-            // Move multiplier towards player
-            multiplier.mesh.position.z += 0.2;
-            
-            // Check for collision with player
-            if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
-                Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
-                
-                // Apply multiplier effect
-                const oldTroops = troops;
-                troops = multiplier.effect(troops);
-                
-                // Add score based on the effect
-                if (troops > oldTroops) {
-                    // Bonus for positive gain
-                    score += (troops - oldTroops) * 10;
-                    
-                    // Increase fusion rate on significant troop gain
-                    if (troops > oldTroops * 2 && troops > 50) {
-                        fusionRate = Math.min(fusionRate + 1, 10);
-                    }
-                    
-                    // Positive effect particles
-                    createParticleEffect(multiplier.mesh.position, 0x00ff00);
-                } else {
-                    // Some points even for negative multipliers
-                    score += 5;
-                    
-                    // Negative effect particles
-                    createParticleEffect(multiplier.mesh.position, 0xff0000);
-                }
-                
-                // Update troops visualization
-                updateTroops();
-                
-                // Remove multiplier
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-                
-                updateUI();
-                checkGameOver();
-            }
-            // Remove if passed player
-            else if (multiplier.mesh.position.z > 10) {
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-            }
-        }
+        const weapon = new THREE.Mesh(weaponGeometry, weaponMaterial);
+        weapon.position.set(size * 0.8, 0, 0);
+        bossGroup.add(weapon);
         
-        // Update mouse cursor
-        if (mouseCursor) {
-            mouseCursor.position.z = 5;
-            mouseCursor.rotation.z += 0.01;
-        }
+        // Weapon blade
+        const bladeGeometry = new THREE.ConeGeometry(size * 0.4, size * 0.8, 4);
+        const bladeMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xaaaaaa,
+            metalness: 0.9,
+            shininess: 100
+        });
         
-        // Scroll road segments for endless runner effect
-        for (let i = 0; i < roadSegments.length; i++) {
-            const segment = roadSegments[i];
-            segment.position.z += 0.2;
-            
-            // If segment has moved past the camera, move it to the back
-            if (segment.position.z > 30) {
-                segment.position.z -= roadSegments.length * 20;
-            }
-        }
-        
-        // Add water animation
-        if (waterLeft && waterRight) {
-            waterLeft.position.z = player ? player.position.z : 0;
-            waterRight.position.z = player ? player.position.z : 0;
-            
-            // Add wave effect to water
-            const waterWave = Math.sin(now) * 0.2;
-            waterLeft.position.y = -1 + waterWave;
-            waterRight.position.y = -1 + waterWave;
-            
-            // Animate water mesh vertices for more realistic waves
-            if (waterLeft.geometry.isBufferGeometry) {
-                const positionAttribute = waterLeft.geometry.getAttribute('position');
-                for (let i = 0; i < positionAttribute.count; i++) {
-                    const x = positionAttribute.getX(i);
-                    const z = positionAttribute.getZ(i);
-                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
-                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
-                    positionAttribute.setY(i, waveX + waveZ);
-                }
-                positionAttribute.needsUpdate = true;
-            }
-            
-            if (waterRight.geometry.isBufferGeometry) {
-                const positionAttribute = waterRight.geometry.getAttribute('position');
-                for (let i = 0; i < positionAttribute.count; i++) {
-                    const x = positionAttribute.getX(i);
-                    const z = positionAttribute.getZ(i);
-                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
-                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
-                    positionAttribute.setY(i, waveX + waveZ);
-                }
-                positionAttribute.needsUpdate = true;
-            }
-        }
-        
-        // Update particles
-        updateParticles();
+        const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+        blade.position.set(size * 0.8, 0, size * 1.4);
+        blade.rotation.x = Math.PI / 2;
+        bossGroup.add(blade);
     }
     
-    renderer.render(scene, camera);
+    // Health bar above boss
+    const healthBarGeometry = new THREE.BoxGeometry(size * 2, size * 0.2, size * 0.1);
+    const healthBarMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    
+    const healthBar = new THREE.Mesh(healthBarGeometry, healthBarMaterial);
+    healthBar.position.set(0, size * 2, 0);
+    bossGroup.add(healthBar);
+    bossGroup.healthBar = healthBar;
+    
+    // Set position
+    bossGroup.position.set(0, 0, -60);
+    
+    // Add custom properties
+    bossGroup.health = health;
+    bossGroup.maxHealth = health;
+    bossGroup.level = level;
+    bossGroup.value = 100 * level;
+    bossGroup.speed = 0.08;
+    bossGroup.shootingInterval = 2000 - (level * 300); // ms
+    bossGroup.lastShot = 0;
+    
+    // Add to scene and bosses array
+    scene.add(bossGroup);
+    bosses.push(bossGroup);
+    
+    return bossGroup;
 }
-
-// Initialize everything
-init();
