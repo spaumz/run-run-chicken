@@ -1,974 +1,211 @@
-// Import Three.js
-import * as THREE from "https://unpkg.com/three@0.157.0/build/three.module.js";
+// Configuration de base
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-// Game variables
-let scene, camera, renderer, player;
-let gameStarted = false;
-let gameOver = false;
-let gamePaused = false;
-let troops = 1;
-let score = 0;
-let fusionRate = 1;
-let multipliers = [];
-let troopMeshes = [];
-let targetPlayerX = 0;
-let timeElapsed = 0;
-let multiplierSpawnRate = 2;
-let lastSpawnTime = 0;
-let mouseCursor;
-let roadSegments = [];
-let waterLeft, waterRight;
-let particles = [];
+// Couleurs
+const BLUE_TEAM = 0x1E90FF;
+const RED_TEAM = 0xFF4500;
 
-// Max troop visualization - Increased as requested
-const MAX_TROOPS_DISPLAYED = 30;
-
-// Colors for evolved troops
-const troopColors = [
-    0xffcc00,  // Yellow - Level 1 (Chicken color)
-    0xff9900,  // Orange - Level 2
-    0xff6600,  // Dark Orange - Level 3
-    0xff3300,  // Red-Orange - Level 4
-    0xff0000   // Red - Level 5
-];
-
-// Get DOM elements
-const gameContainer = document.getElementById("game-container");
-const menu = document.getElementById("menu");
-const startButton = document.getElementById("start-button");
-const ui = document.getElementById("ui");
-const gameOverScreen = document.getElementById("game-over");
-const pauseScreenElement = document.getElementById("pause-screen");
-const restartButton = document.getElementById("restart-button");
-const controlsInfo = document.getElementById("controls-info");
-const troopsCount = document.getElementById("troops-count");
-const scoreCount = document.getElementById("score-count");
-const fusionRateElement = document.getElementById("fusion-rate");
-const finalScore = document.getElementById("final-score");
-const finalFusionRate = document.getElementById("final-fusion-rate");
-
-// Set up event listeners
-startButton.addEventListener("click", startGame);
-restartButton.addEventListener("click", restartGame);
-window.addEventListener("keydown", handleKeyDown);
-
-// Initialize Three.js
-function init() {
-    // Create scene
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
+// Création du pont
+function createBridge() {
+    const bridgeGeometry = new THREE.BoxGeometry(5, 0.2, 30);
+    const bridgeMaterial = new THREE.MeshPhongMaterial({ color: 0xCCCCCC });
+    const bridge = new THREE.Mesh(bridgeGeometry, bridgeMaterial);
     
-    // Create camera - Adjusted to be more top-down
-    camera = new THREE.PerspectiveCamera(
-        85, 
-        gameContainer.clientWidth / gameContainer.clientHeight, 
-        0.1, 
-        1000
-    );
-    camera.position.set(0, 18, 10); // Moved higher up for more top-down view
-    camera.lookAt(0, 0, -20);
+    // Ajout des structures du pont (pylônes et câbles)
+    const pylonGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10);
+    const pylonMaterial = new THREE.MeshPhongMaterial({ color: 0xFF0000 });
     
-    // Create renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    gameContainer.appendChild(renderer.domElement);
+    const pylon1 = new THREE.Mesh(pylonGeometry, pylonMaterial);
+    pylon1.position.set(-3, -5, -10);
     
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    const pylon2 = new THREE.Mesh(pylonGeometry, pylonMaterial);
+    pylon2.position.set(3, -5, -10);
     
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 20, 0);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
-    scene.add(directionalLight);
+    const pylon3 = new THREE.Mesh(pylonGeometry, pylonMaterial);
+    pylon3.position.set(-3, -5, 10);
     
-    // Create water surfaces on both sides of the road
-    createWaterSurfaces();
+    const pylon4 = new THREE.Mesh(pylonGeometry, pylonMaterial);
+    pylon4.position.set(3, -5, 10);
     
-    // Create road segments (instead of a single bridge)
-    createRoadSegments();
+    scene.add(bridge, pylon1, pylon2, pylon3, pylon4);
     
-    // Create rails
-    const leftRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 100),
-        new THREE.MeshPhongMaterial({ color: 0xcc3333 })
-    );
-    leftRail.position.set(-10, 0.75, -20); // Adjusted for wider road
-    leftRail.castShadow = true;
-    leftRail.receiveShadow = true;
-    scene.add(leftRail);
-    
-    const rightRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 100),
-        new THREE.MeshPhongMaterial({ color: 0xcc3333 })
-    );
-    rightRail.position.set(10, 0.75, -20); // Adjusted for wider road
-    rightRail.castShadow = true;
-    rightRail.receiveShadow = true;
-    scene.add(rightRail);
-    
-    // Create mouse cursor
-    createMouseCursor();
-    
-    // Handle window resize
-    window.addEventListener("resize", onWindowResize);
-    
-    // Add mouse controls
-    gameContainer.addEventListener("mousemove", handleMouseMove);
-    
-    // Add initial troop
-    updateTroops();
-    
-    // Start animation loop
-    animate();
-}
-
-// Create water surfaces with better reflection effect
-function createWaterSurfaces() {
-    const waterGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
-    const waterMaterial = new THREE.MeshPhongMaterial({
-        color: 0x0099ff,
-        transparent: true,
-        opacity: 0.8,
-        specular: 0xffffff,
-        shininess: 100
-    });
-    
-    // Left water
-    waterLeft = new THREE.Mesh(waterGeometry, waterMaterial);
-    waterLeft.rotation.x = -Math.PI / 2;
-    waterLeft.position.set(-60, -1, 0);
-    waterLeft.receiveShadow = true;
-    scene.add(waterLeft);
-    
-    // Right water
-    waterRight = new THREE.Mesh(waterGeometry, waterMaterial);
-    waterRight.rotation.x = -Math.PI / 2;
-    waterRight.position.set(60, -1, 0);
-    waterRight.receiveShadow = true;
-    scene.add(waterRight);
-}
-
-// Create road segments for scrolling effect
-function createRoadSegments() {
-    // Create multiple road segments for scrolling
-    const segmentLength = 20;
-    const numSegments = 6;
-    
-    for (let i = 0; i < numSegments; i++) {
-        // Create road segment
-        const roadTexture = createRoadTexture();
-        const roadMaterial = new THREE.MeshPhongMaterial({
-            map: roadTexture,
-            color: 0xaaaaaa
-        });
-        
-        const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(20, 0.5, segmentLength), // Wider road (3 lanes)
-            roadMaterial
-        );
-        
-        segment.position.set(0, -0.25, -20 + (i - numSegments/2) * segmentLength);
-        segment.receiveShadow = true;
-        scene.add(segment);
-        roadSegments.push(segment);
-    }
-}
-
-// Create road texture with lane markings
-function createRoadTexture() {
-    const canvas = document.createElement("canvas");
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext("2d");
-    
-    // Road background
-    ctx.fillStyle = "#555555";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Lane markings (3 lanes)
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([20, 20]);
-    
-    // Left lane divider
-    ctx.beginPath();
-    ctx.moveTo(canvas.width / 3, 0);
-    ctx.lineTo(canvas.width / 3, canvas.height);
-    ctx.stroke();
-    
-    // Right lane divider
-    ctx.beginPath();
-    ctx.moveTo(canvas.width * 2 / 3, 0);
-    ctx.lineTo(canvas.width * 2 / 3, canvas.height);
-    ctx.stroke();
-    
-    // Add some texture to the road
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-    for (let i = 0; i < 100; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const size = Math.random() * 5 + 1;
-        ctx.fillRect(x, y, size, size);
-    }
-    
-    return new THREE.CanvasTexture(canvas);
-}
-
-// Create mouse cursor
-function createMouseCursor() {
-    const cursorGeometry = new THREE.RingGeometry(0.1, 0.2, 16);
-    const cursorMaterial = new THREE.MeshBasicMaterial({ 
-        color: 0xffffff,
-        side: THREE.DoubleSide
-    });
-    mouseCursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
-    mouseCursor.rotation.x = Math.PI / 2;
-    mouseCursor.position.set(0, 0.5, 5);
-    scene.add(mouseCursor);
-}
-
-// Create text texture for door labels - Updated to match the reference image
-function createTextTexture(text, backgroundColor, isPositive) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
-    
-    const ctx = canvas.getContext("2d");
-    
-    // Background color (blue for multiplication, etc.)
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add gradient effect
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, "rgba(255, 255, 255, 0.3)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0.2)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add border
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#ffffff";
-    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-    
-    // Text in white with shadow
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 140px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-    
-    return new THREE.CanvasTexture(canvas);
-}
-
-// Create a chicken based on level
-function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
-    const troopGroup = new THREE.Group();
-    
-    // Size increases with level
-    const sizeMultiplier = 1 + (level * 0.25);
-    
-    // Chicken body (egg shape)
-    const body = new THREE.Mesh(
-        new THREE.SphereGeometry(0.4 * sizeMultiplier, 16, 16),
-        new THREE.MeshPhongMaterial({ 
-            color: troopColors[level],
-            shininess: 70
-        })
-    );
-    body.scale.set(0.8, 1, 0.9);
-    body.position.y = 0.4 * sizeMultiplier;
-    body.castShadow = true;
-    troopGroup.add(body);
-    
-    // Chicken head
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.25 * sizeMultiplier, 16, 16),
-        new THREE.MeshPhongMaterial({ color: troopColors[level] })
-    );
-    head.position.set(0, 0.8 * sizeMultiplier, 0.3 * sizeMultiplier);
-    head.castShadow = true;
-    troopGroup.add(head);
-    
-    // Beak
-    const beak = new THREE.Mesh(
-        new THREE.ConeGeometry(0.1 * sizeMultiplier, 0.3 * sizeMultiplier, 8),
-        new THREE.MeshPhongMaterial({ color: 0xffaa00 })
-    );
-    beak.rotation.x = Math.PI / 2;
-    beak.position.set(0, 0.8 * sizeMultiplier, 0.5 * sizeMultiplier);
-    beak.castShadow = true;
-    troopGroup.add(beak);
-    
-    // Eyes
-    const eyeGeometry = new THREE.SphereGeometry(0.05 * sizeMultiplier, 8, 8);
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    
-    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.12 * sizeMultiplier, 0.85 * sizeMultiplier, 0.4 * sizeMultiplier);
-    troopGroup.add(leftEye);
-    
-    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.12 * sizeMultiplier, 0.85 * sizeMultiplier, 0.4 * sizeMultiplier);
-    troopGroup.add(rightEye);
-    
-    // Wings
-    const wingGeometry = new THREE.BoxGeometry(0.4 * sizeMultiplier, 0.1 * sizeMultiplier, 0.3 * sizeMultiplier);
-    wingGeometry.translate(0, 0, 0.15 * sizeMultiplier);
-    const wingMaterial = new THREE.MeshPhongMaterial({ 
-        color: troopColors[level],
-        shininess: 40
-    });
-    
-    const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    leftWing.position.set(-0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    leftWing.rotation.y = -Math.PI / 6;
-    leftWing.castShadow = true;
-    troopGroup.add(leftWing);
-    
-    const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    rightWing.position.set(0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    rightWing.rotation.y = Math.PI / 6;
-    rightWing.castShadow = true;
-    troopGroup.add(rightWing);
-    
-    // Legs
-    const legGeometry = new THREE.CylinderGeometry(0.03 * sizeMultiplier, 0.03 * sizeMultiplier, 0.3 * sizeMultiplier);
-    const legMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
-    
-    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-    leftLeg.position.set(-0.15 * sizeMultiplier, 0.15 * sizeMultiplier, 0);
-    troopGroup.add(leftLeg);
-    
-    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-    rightLeg.position.set(0.15 * sizeMultiplier, 0.15 * sizeMultiplier, 0);
-    troopGroup.add(rightLeg);
-    
-    // Comb for higher levels
-    if (level > 0) {
-        const comb = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1 * sizeMultiplier, 0.2 * sizeMultiplier, 0.1 * sizeMultiplier),
-            new THREE.MeshPhongMaterial({ color: 0xff0000 })
-        );
-        comb.position.set(0, 1 * sizeMultiplier, 0.2 * sizeMultiplier);
-        troopGroup.add(comb);
-    }
-    
-    // Special accessories for higher levels
-    if (level >= 3) {
-        // Add a crown for level 3+
-        const crown = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2 * sizeMultiplier, 0.25 * sizeMultiplier, 0.1 * sizeMultiplier, 8),
-            new THREE.MeshPhongMaterial({ color: 0xffdd00, shininess: 100 })
-        );
-        crown.position.set(0, 1.1 * sizeMultiplier, 0.2 * sizeMultiplier);
-        troopGroup.add(crown);
-    }
-    
-    if (level >= 4) {
-        // Add a cape for level 4+
-        const cape = new THREE.Mesh(
-            new THREE.PlaneGeometry(0.8 * sizeMultiplier, 0.7 * sizeMultiplier),
-            new THREE.MeshPhongMaterial({ 
-                color: 0xff5500,
-                side: THREE.DoubleSide
-            })
-        );
-        cape.position.set(0, 0.6 * sizeMultiplier, -0.3 * sizeMultiplier);
-        cape.rotation.x = Math.PI / 8;
-        troopGroup.add(cape);
-    }
-    
-    // Set position
-    troopGroup.position.set(position.x, 0, position.z);
-    troopGroup.level = level;
-    
-    // Add to scene
-    scene.add(troopGroup);
-    
-    return troopGroup;
-}
-
-// Create particle effect for collisions
-function createParticleEffect(position, color) {
-    const particleCount = 15;
-    const particleGroup = new THREE.Group();
-    
-    for (let i = 0; i < particleCount; i++) {
-        const particle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 8, 8),
-            new THREE.MeshBasicMaterial({ color: color })
-        );
-        
-        // Random position offset
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 0.2 + Math.random() * 0.5;
-        particle.position.set(
-            Math.cos(angle) * radius,
-            0.5 + Math.random() * 1,
-            Math.sin(angle) * radius
-        );
-        
-        // Random velocity
-        particle.velocity = new THREE.Vector3(
-            (Math.random() - 0.5) * 0.2,
-            0.1 + Math.random() * 0.2,
-            (Math.random() - 0.5) * 0.2
-        );
-        
-        // Life time in frames
-        particle.life = 30 + Math.floor(Math.random() * 20);
-        particle.maxLife = particle.life;
-        
-        particleGroup.add(particle);
-    }
-    
-    particleGroup.position.copy(position);
-    scene.add(particleGroup);
-    particles.push(particleGroup);
-    
-    return particleGroup;
-}
-
-// Update particles
-function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const particleGroup = particles[i];
-        let allDead = true;
-        
-        for (let j = 0; j < particleGroup.children.length; j++) {
-            const particle = particleGroup.children[j];
-            
-            // Update position
-            particle.position.add(particle.velocity);
-            
-            // Apply gravity
-            particle.velocity.y -= 0.01;
-            
-            // Update life
-            particle.life--;
-            
-            // Fade out
-            if (particle.material) {
-                particle.material.opacity = particle.life / particle.maxLife;
-                particle.material.transparent = true;
-            }
-            
-            if (particle.life > 0) {
-                allDead = false;
-            }
-        }
-        
-        // Remove dead particle group
-        if (allDead) {
-            scene.remove(particleGroup);
-            particles.splice(i, 1);
-        }
-    }
-}
-
-// Update troops visualization
-function updateTroops() {
-    // Remove all existing troops
-    for (let i = 0; i < troopMeshes.length; i++) {
-        scene.remove(troopMeshes[i]);
-    }
-    troopMeshes = [];
-    
-    // Reset player
-    player = null;
-    
-    // Count how many troops of each level we need
-    let remainingTroops = troops;
-    let troopCounts = [0, 0, 0, 0, 0]; // Level 1-5
-    
-    // Calculate troop distribution using fusion rate
-    while (remainingTroops > 0) {
-        if (remainingTroops >= 100 * fusionRate) {
-            troopCounts[4]++;
-            remainingTroops -= 100 * fusionRate;
-        } else if (remainingTroops >= 50 * fusionRate) {
-            troopCounts[3]++;
-            remainingTroops -= 50 * fusionRate;
-        } else if (remainingTroops >= 10 * fusionRate) {
-            troopCounts[2]++;
-            remainingTroops -= 10 * fusionRate;
-        } else if (remainingTroops >= 5 * fusionRate) {
-            troopCounts[1]++;
-            remainingTroops -= 5 * fusionRate;
-        } else {
-            // Always have at least one basic troop
-            troopCounts[0] = Math.max(1, Math.min(remainingTroops, 5)); 
-            remainingTroops = 0;
-        }
-        
-        // Limit total visualized troops
-        if (troopMeshes.length + troopCounts.reduce((a, b) => a + b, 0) > MAX_TROOPS_DISPLAYED) {
-            break;
-        }
-    }
-    
-    // Create troops of each level in formation
-    let xPos = -6;
-    let zPos = 0;
-    
-    // Create highest level troops first (bigger ones in back)
-    for (let level = 4; level >= 0; level--) {
-        const count = troopCounts[level];
-        for (let i = 0; i < count && troopMeshes.length < MAX_TROOPS_DISPLAYED; i++) {
-            const troop = createTroopMesh(level, { x: xPos, z: zPos });
-            troopMeshes.push(troop);
-            
-            // Set the first troop as player
-            if (!player) player = troop;
-            
-            // Update position for next troop
-            xPos += 1.5;
-            if (xPos > 6) {
-                xPos = -6;
-                zPos -= 1.5;
-            }
-        }
-    }
-    
-    // If no troops were created, create at least one
-    if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: 0 });
-        troopMeshes.push(troop);
-        player = troop;
-    }
-}
-
-// Create door multiplier - Updated to match the reference image
-function createMultiplier() {
-    // Define multiplier types
-    const types = [
-        { op: "+", color: 0x00cc44, min: 1, max: 5 },  // Addition (green)
-        { op: "-", color: 0xcc0000, min: 1, max: 3 },  // Subtraction (red)
-        { op: "×", color: 0x00aaff, min: 2, max: 5 },  // Multiplication (blue)
-        { op: "÷", color: 0xffcc00, min: 2, max: 3 }   // Division (yellow)
-    ];
-    
-    // Randomly select type
-    const typeIndex = Math.floor(Math.random() * types.length);
-    const type = types[typeIndex];
-    
-    // Generate value
-    const value = Math.floor(Math.random() * (type.max - type.min + 1)) + type.min;
-    
-    // Create door group
-    const doorGroup = new THREE.Group();
-    
-    // Get color hex as string
-    const colorHex = "#" + type.color.toString(16).padStart(6, "0");
-    const isPositive = (type.op === "+" || type.op === "×");
-    
-    // New door design - based on the image
-    // Create an outline frame first
-    const outlineGeometry = new THREE.BoxGeometry(4.2, 6.2, 0.6);
-    const outlineMaterial = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.9
-    });
-    const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
-    outline.position.y = 3;
-    outline.castShadow = true;
-    doorGroup.add(outline);
-    
-    // Main door frame
-    const frameGeometry = new THREE.BoxGeometry(4, 6, 0.5);
-    const frameMaterial = new THREE.MeshPhongMaterial({ 
-        color: type.color,
-        transparent: true,
-        opacity: 0.9,
-        shininess: 90
-    });
-    const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-    frame.position.y = 3;
-    frame.castShadow = true;
-    doorGroup.add(frame);
-    
-    // Door opening - slightly transparent
-    const openingGeometry = new THREE.BoxGeometry(3.5, 5.5, 0.6);
-    const openingMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.3,
-        side: THREE.DoubleSide
-    });
-    const opening = new THREE.Mesh(openingGeometry, openingMaterial);
-    opening.position.y = 3;
-    opening.position.z = 0.1;
-    doorGroup.add(opening);
-    
-    // Create sign with multiplier text
-    const textTexture = createTextTexture(type.op + value, colorHex, isPositive);
-    const signMaterial = new THREE.MeshBasicMaterial({
-        map: textTexture,
-        transparent: true,
-        opacity: 0.95
-    });
-    
-    const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(3, 3),
-        signMaterial
-    );
-    sign.position.set(0, 3, 0.3);
-    doorGroup.add(sign);
-    
-    // Add a glow effect around the door
-    const glowGeometry = new THREE.TorusGeometry(2.5, 0.15, 16, 32);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.7
-    });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.set(0, 3, 0.3);
-    glow.rotation.x = Math.PI / 2;
-    doorGroup.add(glow);
-    
-    // Add another inner glow with the door's color
-    const innerGlowGeometry = new THREE.TorusGeometry(2.3, 0.1, 16, 32);
-    const innerGlowMaterial = new THREE.MeshBasicMaterial({
-        color: type.color,
+    // Création de l'eau
+    const waterGeometry = new THREE.PlaneGeometry(100, 100);
+    const waterMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0x0077be, 
         transparent: true,
         opacity: 0.8
     });
-    const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
-    innerGlow.position.set(0, 3, 0.35);
-    innerGlow.rotation.x = Math.PI / 2;
-    doorGroup.add(innerGlow);
+    const water = new THREE.Mesh(waterGeometry, waterMaterial);
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = -5;
+    scene.add(water);
     
-    // Set random position on x-axis (wider range for 3-lane road)
-    const x = Math.random() * 16 - 8; // Between -8 and 8
-    doorGroup.position.set(x, 0, -60);
+    return bridge;
+}
+
+// Création d'un soldat
+function createSoldier(team, position) {
+    const group = new THREE.Group();
     
-    // Add to scene and multipliers array
-    scene.add(doorGroup);
+    // Corps
+    const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.6);
+    const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xFFD700 });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     
-    // Different effects based on operator
-    let effect;
-    if (type.op === "+") {
-        effect = t => t + value;
-    } else if (type.op === "-") {
-        effect = t => Math.max(0, t - value);
-    } else if (type.op === "×") {
-        effect = t => t * value;
-    } else if (type.op === "÷") {
-        effect = t => Math.max(1, Math.floor(t / value));
+    // Tête
+    const headGeometry = new THREE.SphereGeometry(0.2);
+    const headMaterial = new THREE.MeshPhongMaterial({ color: 0xFFE4C4 });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.y = 0.5;
+    
+    // Casque
+    const helmetGeometry = new THREE.SphereGeometry(0.25, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const helmetMaterial = new THREE.MeshPhongMaterial({ color: team });
+    const helmet = new THREE.Mesh(helmetGeometry, helmetMaterial);
+    helmet.position.y = 0.5;
+    
+    group.add(body, head, helmet);
+    group.position.copy(position);
+    scene.add(group);
+    
+    return group;
+}
+
+// Création des équipes
+function createTeam(team, count, startZ) {
+    const soldiers = [];
+    const teamColor = team === 'blue' ? BLUE_TEAM : RED_TEAM;
+    
+    for (let i = 0; i < count; i++) {
+        const row = Math.floor(i / 5);
+        const col = i % 5;
+        const x = col * 0.5 - 1;
+        const z = startZ + row * 0.5;
+        
+        const soldier = createSoldier(teamColor, new THREE.Vector3(x, 0.5, z));
+        soldiers.push({
+            mesh: soldier,
+            health: 100,
+            team: team,
+            attacking: false
+        });
     }
     
-    // Store multiplier info
-    multipliers.push({
-        mesh: doorGroup,
-        type: type.op,
-        value: value,
-        effect: effect,
-        color: type.color
-    });
-    
-    return doorGroup;
+    return soldiers;
 }
 
-// Window resize handler
-function onWindowResize() {
-    camera.aspect = gameContainer.clientWidth / gameContainer.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
+// Initialisation de la scène
+function initScene() {
+    // Lumières
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 20, 10);
+    scene.add(directionalLight);
+    
+    // Création du pont
+    const bridge = createBridge();
+    
+    // Création des équipes
+    const blueTeam = createTeam('blue', 20, -10);
+    const redTeam = createTeam('red', 10, 5);
+    
+    // Position de la caméra
+    camera.position.set(0, 10, -15);
+    camera.lookAt(0, 0, 0);
+    
+    return { bridge, blueTeam, redTeam };
 }
 
-// Mouse controls
-function handleMouseMove(event) {
-    if (gamePaused) return;
-    
-    // Calculate mouse position relative to container
-    const rect = gameContainer.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / gameContainer.clientWidth) * 2 - 1;
-    
-    // Convert to world coordinates (wider range for 3-lane road)
-    targetPlayerX = mouseX * 8;
-    
-    // Update cursor position
-    if (mouseCursor) {
-        mouseCursor.position.x = targetPlayerX;
-    }
-}
+// Variables de jeu
+let gameObjects = initScene();
+let gameState = {
+    score: 0,
+    running: true
+};
 
-// Keyboard controls for pause
-function handleKeyDown(event) {
-    // Handle pause toggle with "P" key
-    if (event.key === "p" || event.key === "P") {
-        if (gameStarted && !gameOver) {
-            gamePaused = !gamePaused;
-            pauseScreenElement.style.display = gamePaused ? "block" : "none";
-        }
-    }
-}
-
-// Start game
-function startGame() {
-    gameStarted = true;
-    menu.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    updateUI();
-}
-
-// Restart game
-function restartGame() {
-    // Reset game state
-    gameOver = false;
-    gamePaused = false;
-    troops = 1;
-    score = 0;
-    fusionRate = 1;
-    timeElapsed = 0;
-    lastSpawnTime = 0;
-    targetPlayerX = 0;
-    
-    // Remove all multipliers
-    for (let i = 0; i < multipliers.length; i++) {
-        scene.remove(multipliers[i].mesh);
-    }
-    multipliers = [];
-    
-    // Remove all particles
-    for (let i = 0; i < particles.length; i++) {
-        scene.remove(particles[i]);
-    }
-    particles = [];
-    
-    // Reset troops
-    updateTroops();
-    
-    // Hide game over, show UI
-    gameOverScreen.style.display = "none";
-    pauseScreenElement.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    
-    updateUI();
-}
-
-// Update UI
-function updateUI() {
-    troopsCount.textContent = troops;
-    scoreCount.textContent = score;
-    fusionRateElement.textContent = fusionRate;
-    finalScore.textContent = score;
-    finalFusionRate.textContent = fusionRate;
-}
-
-// Check for game over
-function checkGameOver() {
-    if (troops <= 0 && !gameOver) {
-        gameOver = true;
-        ui.style.display = "none";
-        controlsInfo.style.display = "none";
-        gameOverScreen.style.display = "block";
-        updateUI();
-    }
-}
-
-// Animation loop
-function animate(time) {
+// Animation et logique de jeu
+function animate() {
     requestAnimationFrame(animate);
     
-    // Skip updates if paused
-    if (gamePaused) {
-        renderer.render(scene, camera);
-        return;
-    }
-    
-    if (gameStarted && !gameOver) {
-        // Convert time to seconds
-        const now = time * 0.001;
-        const deltaTime = now - timeElapsed;
-        timeElapsed = now;
+    if (gameState.running) {
+        // Mise à jour des positions des soldats
+        updateSoldiers(gameObjects.blueTeam, gameObjects.redTeam);
         
-        // Smooth player movement (lerp)
-        if (player) {
-            // Gradually move towards target position
-            player.position.x += (targetPlayerX - player.position.x) * 0.05;
-            
-            // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-9, Math.min(9, player.position.x));
-            
-            // Move all troops to follow the leader in formation
-            for (let i = 1; i < troopMeshes.length; i++) {
-                const troop = troopMeshes[i];
-                
-                // Calculate positions in a grid pattern
-                const row = Math.floor(i / 5);
-                const col = i % 5;
-                
-                // Position offset from leader
-                const offsetX = (col - 2) * 1.5;
-                const offsetZ = -row * 1.5;
-                
-                // Target position
-                const targetX = player.position.x + offsetX;
-                const targetZ = player.position.z + offsetZ;
-                
-                // Smoother movement for followers
-                troop.position.x += (targetX - troop.position.x) * 0.05;
-                troop.position.z += (targetZ - troop.position.z) * 0.05;
-                
-                // Add chicken waddle animation
-                troop.position.y = Math.sin(now * 8 + i) * 0.1;
-                
-                // Wing flapping for random chickens
-                if (troop.children[5]) { // Left wing
-                    troop.children[5].rotation.z = Math.sin(now * 10 + i) * 0.2;
-                }
-                if (troop.children[6]) { // Right wing
-                    troop.children[6].rotation.z = -Math.sin(now * 10 + i) * 0.2;
-                }
-            }
-            
-            // Add chicken waddle animation to leader too
-            player.position.y = Math.sin(now * 8) * 0.1;
-            
-            // Wing flapping for leader
-            if (player.children[5]) { // Left wing
-                player.children[5].rotation.z = Math.sin(now * 10) * 0.2;
-            }
-            if (player.children[6]) { // Right wing
-                player.children[6].rotation.z = -Math.sin(now * 10) * 0.2;
-            }
-        }
+        // Vérification des collisions
+        checkCollisions(gameObjects.blueTeam, gameObjects.redTeam);
         
-        // Spawn multipliers
-        if (now - lastSpawnTime > multiplierSpawnRate) {
-            lastSpawnTime = now;
-            createMultiplier();
-            
-            // Increase spawn rate with score
-            multiplierSpawnRate = Math.max(0.8, 2 - (score / 1000));
-        }
-        
-        // Update multipliers
-        for (let i = multipliers.length - 1; i >= 0; i--) {
-            const multiplier = multipliers[i];
-            
-            // Move multiplier towards player
-            multiplier.mesh.position.z += 0.2;
-            
-            // Check for collision with player
-            if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
-                Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
-                
-                // Apply multiplier effect
-                const oldTroops = troops;
-                troops = multiplier.effect(troops);
-                
-                // Add score based on the effect
-                if (troops > oldTroops) {
-                    // Bonus for positive gain
-                    score += (troops - oldTroops) * 10;
-                    
-                    // Increase fusion rate on significant troop gain
-                    if (troops > oldTroops * 2 && troops > 50) {
-                        fusionRate = Math.min(fusionRate + 1, 10);
-                    }
-                    
-                    // Positive effect particles
-                    createParticleEffect(multiplier.mesh.position, 0x00ff00);
-                } else {
-                    // Some points even for negative multipliers
-                    score += 5;
-                    
-                    // Negative effect particles
-                    createParticleEffect(multiplier.mesh.position, 0xff0000);
-                }
-                
-                // Update troops visualization
-                updateTroops();
-                
-                // Remove multiplier
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-                
-                updateUI();
-                checkGameOver();
-            }
-            // Remove if passed player
-            else if (multiplier.mesh.position.z > 10) {
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-            }
-        }
-        
-        // Update mouse cursor
-        if (mouseCursor) {
-            mouseCursor.position.z = 5;
-            mouseCursor.rotation.z += 0.01;
-        }
-        
-        // Scroll road segments for endless runner effect
-        for (let i = 0; i < roadSegments.length; i++) {
-            const segment = roadSegments[i];
-            segment.position.z += 0.2;
-            
-            // If segment has moved past the camera, move it to the back
-            if (segment.position.z > 30) {
-                segment.position.z -= roadSegments.length * 20;
-            }
-        }
-        
-        // Add water animation
-        if (waterLeft && waterRight) {
-            waterLeft.position.z = player ? player.position.z : 0;
-            waterRight.position.z = player ? player.position.z : 0;
-            
-            // Add wave effect to water
-            const waterWave = Math.sin(now) * 0.2;
-            waterLeft.position.y = -1 + waterWave;
-            waterRight.position.y = -1 + waterWave;
-            
-            // Animate water mesh vertices for more realistic waves
-            if (waterLeft.geometry.isBufferGeometry) {
-                const positionAttribute = waterLeft.geometry.getAttribute('position');
-                for (let i = 0; i < positionAttribute.count; i++) {
-                    const x = positionAttribute.getX(i);
-                    const z = positionAttribute.getZ(i);
-                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
-                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
-                    positionAttribute.setY(i, waveX + waveZ);
-                }
-                positionAttribute.needsUpdate = true;
-            }
-            
-            if (waterRight.geometry.isBufferGeometry) {
-                const positionAttribute = waterRight.geometry.getAttribute('position');
-                for (let i = 0; i < positionAttribute.count; i++) {
-                    const x = positionAttribute.getX(i);
-                    const z = positionAttribute.getZ(i);
-                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
-                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
-                    positionAttribute.setY(i, waveX + waveZ);
-                }
-                positionAttribute.needsUpdate = true;
-            }
-        }
-        
-        // Update particles
-        updateParticles();
+        // Mise à jour du score
+        document.getElementById('score').textContent = gameState.score;
     }
     
     renderer.render(scene, camera);
 }
 
-// Initialize everything
-init();
+// Mise à jour des positions des soldats
+function updateSoldiers(blueTeam, redTeam) {
+    // Les soldats bleus avancent
+    blueTeam.forEach(soldier => {
+        if (soldier.health > 0 && !soldier.attacking) {
+            soldier.mesh.position.z += 0.03;
+        }
+    });
+    
+    // Les soldats rouges avancent
+    redTeam.forEach(soldier => {
+        if (soldier.health > 0 && !soldier.attacking) {
+            soldier.mesh.position.z -= 0.02;
+        }
+    });
+}
+
+// Vérification des collisions
+function checkCollisions(blueTeam, redTeam) {
+    blueTeam.forEach(blueSoldier => {
+        if (blueSoldier.health <= 0) return;
+        
+        redTeam.forEach(redSoldier => {
+            if (redSoldier.health <= 0) return;
+            
+            const distance = blueSoldier.mesh.position.distanceTo(redSoldier.mesh.position);
+            
+            if (distance < 0.7) {
+                blueSoldier.attacking = true;
+                redSoldier.attacking = true;
+                
+                // Combat
+                if (Math.random() > 0.5) {
+                    redSoldier.health -= 25;
+                    if (redSoldier.health <= 0) {
+                        scene.remove(redSoldier.mesh);
+                        gameState.score += 10;
+                        blueSoldier.attacking = false;
+                    }
+                } else {
+                    blueSoldier.health -= 25;
+                    if (blueSoldier.health <= 0) {
+                        scene.remove(blueSoldier.mesh);
+                        gameState.score -= 5;
+                        redSoldier.attacking = false;
+                    }
+                }
+            }
+        });
+    });
+}
+
+// Gestion du redimensionnement de la fenêtre
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Démarrer l'animation
+animate();
