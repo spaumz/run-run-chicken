@@ -18,6 +18,7 @@ let lastSpawnTime = 0;
 let mouseCursor;
 let roadSegments = [];
 let waterLeft, waterRight;
+let particles = [];
 
 // Max troop visualization - Increased as requested
 const MAX_TROOPS_DISPLAYED = 30;
@@ -70,6 +71,8 @@ function init() {
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     gameContainer.appendChild(renderer.domElement);
     
     // Add lights
@@ -78,6 +81,9 @@ function init() {
     
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(10, 20, 0);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
     scene.add(directionalLight);
     
     // Create water surfaces on both sides of the road
@@ -92,6 +98,8 @@ function init() {
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
     leftRail.position.set(-10, 0.75, -20); // Adjusted for wider road
+    leftRail.castShadow = true;
+    leftRail.receiveShadow = true;
     scene.add(leftRail);
     
     const rightRail = new THREE.Mesh(
@@ -99,6 +107,8 @@ function init() {
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
     rightRail.position.set(10, 0.75, -20); // Adjusted for wider road
+    rightRail.castShadow = true;
+    rightRail.receiveShadow = true;
     scene.add(rightRail);
     
     // Create mouse cursor
@@ -117,9 +127,9 @@ function init() {
     animate();
 }
 
-// Create water surfaces
+// Create water surfaces with better reflection effect
 function createWaterSurfaces() {
-    const waterGeometry = new THREE.PlaneGeometry(100, 100);
+    const waterGeometry = new THREE.PlaneGeometry(100, 100, 20, 20);
     const waterMaterial = new THREE.MeshPhongMaterial({
         color: 0x0099ff,
         transparent: true,
@@ -132,12 +142,14 @@ function createWaterSurfaces() {
     waterLeft = new THREE.Mesh(waterGeometry, waterMaterial);
     waterLeft.rotation.x = -Math.PI / 2;
     waterLeft.position.set(-60, -1, 0);
+    waterLeft.receiveShadow = true;
     scene.add(waterLeft);
     
     // Right water
     waterRight = new THREE.Mesh(waterGeometry, waterMaterial);
     waterRight.rotation.x = -Math.PI / 2;
     waterRight.position.set(60, -1, 0);
+    waterRight.receiveShadow = true;
     scene.add(waterRight);
 }
 
@@ -161,6 +173,7 @@ function createRoadSegments() {
         );
         
         segment.position.set(0, -0.25, -20 + (i - numSegments/2) * segmentLength);
+        segment.receiveShadow = true;
         scene.add(segment);
         roadSegments.push(segment);
     }
@@ -193,6 +206,15 @@ function createRoadTexture() {
     ctx.moveTo(canvas.width * 2 / 3, 0);
     ctx.lineTo(canvas.width * 2 / 3, canvas.height);
     ctx.stroke();
+    
+    // Add some texture to the road
+    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+    for (let i = 0; i < 100; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 5 + 1;
+        ctx.fillRect(x, y, size, size);
+    }
     
     return new THREE.CanvasTexture(canvas);
 }
@@ -265,6 +287,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     );
     body.scale.set(0.8, 1, 0.9);
     body.position.y = 0.4 * sizeMultiplier;
+    body.castShadow = true;
     troopGroup.add(body);
     
     // Chicken head
@@ -273,6 +296,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         new THREE.MeshPhongMaterial({ color: troopColors[level] })
     );
     head.position.set(0, 0.8 * sizeMultiplier, 0.3 * sizeMultiplier);
+    head.castShadow = true;
     troopGroup.add(head);
     
     // Beak
@@ -282,6 +306,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     );
     beak.rotation.x = Math.PI / 2;
     beak.position.set(0, 0.8 * sizeMultiplier, 0.5 * sizeMultiplier);
+    beak.castShadow = true;
     troopGroup.add(beak);
     
     // Eyes
@@ -307,11 +332,13 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
     leftWing.position.set(-0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
     leftWing.rotation.y = -Math.PI / 6;
+    leftWing.castShadow = true;
     troopGroup.add(leftWing);
     
     const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
     rightWing.position.set(0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
     rightWing.rotation.y = Math.PI / 6;
+    rightWing.castShadow = true;
     troopGroup.add(rightWing);
     
     // Legs
@@ -347,6 +374,20 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         troopGroup.add(crown);
     }
     
+    if (level >= 4) {
+        // Add a cape for level 4+
+        const cape = new THREE.Mesh(
+            new THREE.PlaneGeometry(0.8 * sizeMultiplier, 0.7 * sizeMultiplier),
+            new THREE.MeshPhongMaterial({ 
+                color: 0xff5500,
+                side: THREE.DoubleSide
+            })
+        );
+        cape.position.set(0, 0.6 * sizeMultiplier, -0.3 * sizeMultiplier);
+        cape.rotation.x = Math.PI / 8;
+        troopGroup.add(cape);
+    }
+    
     // Set position
     troopGroup.position.set(position.x, 0, position.z);
     troopGroup.level = level;
@@ -355,6 +396,84 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     scene.add(troopGroup);
     
     return troopGroup;
+}
+
+// Create particle effect for collisions
+function createParticleEffect(position, color) {
+    const particleCount = 15;
+    const particleGroup = new THREE.Group();
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 8, 8),
+            new THREE.MeshBasicMaterial({ color: color })
+        );
+        
+        // Random position offset
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 0.2 + Math.random() * 0.5;
+        particle.position.set(
+            Math.cos(angle) * radius,
+            0.5 + Math.random() * 1,
+            Math.sin(angle) * radius
+        );
+        
+        // Random velocity
+        particle.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 0.2,
+            0.1 + Math.random() * 0.2,
+            (Math.random() - 0.5) * 0.2
+        );
+        
+        // Life time in frames
+        particle.life = 30 + Math.floor(Math.random() * 20);
+        particle.maxLife = particle.life;
+        
+        particleGroup.add(particle);
+    }
+    
+    particleGroup.position.copy(position);
+    scene.add(particleGroup);
+    particles.push(particleGroup);
+    
+    return particleGroup;
+}
+
+// Update particles
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const particleGroup = particles[i];
+        let allDead = true;
+        
+        for (let j = 0; j < particleGroup.children.length; j++) {
+            const particle = particleGroup.children[j];
+            
+            // Update position
+            particle.position.add(particle.velocity);
+            
+            // Apply gravity
+            particle.velocity.y -= 0.01;
+            
+            // Update life
+            particle.life--;
+            
+            // Fade out
+            if (particle.material) {
+                particle.material.opacity = particle.life / particle.maxLife;
+                particle.material.transparent = true;
+            }
+            
+            if (particle.life > 0) {
+                allDead = false;
+            }
+        }
+        
+        // Remove dead particle group
+        if (allDead) {
+            scene.remove(particleGroup);
+            particles.splice(i, 1);
+        }
+    }
 }
 
 // Update troops visualization
@@ -463,6 +582,7 @@ function createMultiplier() {
     });
     const outline = new THREE.Mesh(outlineGeometry, outlineMaterial);
     outline.position.y = 3;
+    outline.castShadow = true;
     doorGroup.add(outline);
     
     // Main door frame
@@ -475,6 +595,7 @@ function createMultiplier() {
     });
     const frame = new THREE.Mesh(frameGeometry, frameMaterial);
     frame.position.y = 3;
+    frame.castShadow = true;
     doorGroup.add(frame);
     
     // Door opening - slightly transparent
@@ -622,6 +743,12 @@ function restartGame() {
     }
     multipliers = [];
     
+    // Remove all particles
+    for (let i = 0; i < particles.length; i++) {
+        scene.remove(particles[i]);
+    }
+    particles = [];
+    
     // Reset troops
     updateTroops();
     
@@ -755,9 +882,15 @@ function animate(time) {
                     if (troops > oldTroops * 2 && troops > 50) {
                         fusionRate = Math.min(fusionRate + 1, 10);
                     }
+                    
+                    // Positive effect particles
+                    createParticleEffect(multiplier.mesh.position, 0x00ff00);
                 } else {
                     // Some points even for negative multipliers
                     score += 5;
+                    
+                    // Negative effect particles
+                    createParticleEffect(multiplier.mesh.position, 0xff0000);
                 }
                 
                 // Update troops visualization
@@ -803,7 +936,35 @@ function animate(time) {
             const waterWave = Math.sin(now) * 0.2;
             waterLeft.position.y = -1 + waterWave;
             waterRight.position.y = -1 + waterWave;
+            
+            // Animate water mesh vertices for more realistic waves
+            if (waterLeft.geometry.isBufferGeometry) {
+                const positionAttribute = waterLeft.geometry.getAttribute('position');
+                for (let i = 0; i < positionAttribute.count; i++) {
+                    const x = positionAttribute.getX(i);
+                    const z = positionAttribute.getZ(i);
+                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
+                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
+                    positionAttribute.setY(i, waveX + waveZ);
+                }
+                positionAttribute.needsUpdate = true;
+            }
+            
+            if (waterRight.geometry.isBufferGeometry) {
+                const positionAttribute = waterRight.geometry.getAttribute('position');
+                for (let i = 0; i < positionAttribute.count; i++) {
+                    const x = positionAttribute.getX(i);
+                    const z = positionAttribute.getZ(i);
+                    const waveX = Math.sin(x * 0.5 + now * 2) * 0.1;
+                    const waveZ = Math.cos(z * 0.5 + now * 2) * 0.1;
+                    positionAttribute.setY(i, waveX + waveZ);
+                }
+                positionAttribute.needsUpdate = true;
+            }
         }
+        
+        // Update particles
+        updateParticles();
     }
     
     renderer.render(scene, camera);
