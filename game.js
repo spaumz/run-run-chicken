@@ -58,15 +58,15 @@ function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
     
-    // Create camera - Adjusted to be more top-down
-    camera = new THREE.PerspectiveCamera(
-        85, 
-        gameContainer.clientWidth / gameContainer.clientHeight, 
-        0.1, 
-        1000
-    );
-    camera.position.set(0, 18, 10); // Moved higher up for more top-down view
-    camera.lookAt(0, 0, -20);
+    // Create camera - Vue plus plongeante
+camera = new THREE.PerspectiveCamera(
+    90,  // Angle de vue plus large
+    gameContainer.clientWidth / gameContainer.clientHeight, 
+    0.1, 
+    1000
+);
+camera.position.set(0, 22, 8); // Position plus haute et légèrement plus proche
+camera.lookAt(0, 0, -15);      // Regarder plus vers l'avant de la route
     
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -92,14 +92,14 @@ function init() {
         new THREE.BoxGeometry(0.5, 1.5, 100),
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
-    leftRail.position.set(-10, 0.75, -20); // Adjusted for wider road
+    leftRail.position.set(-12, 0.75, -20);
     scene.add(leftRail);
     
     const rightRail = new THREE.Mesh(
         new THREE.BoxGeometry(0.5, 1.5, 100),
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
-    rightRail.position.set(10, 0.75, -20); // Adjusted for wider road
+    rightRail.position.set(12, 0.75, -20);
     scene.add(rightRail);
     
     // Create mouse cursor
@@ -157,9 +157,9 @@ function createRoadSegments() {
         });
         
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(20, 0.5, segmentLength), // Wider road (3 lanes)
-            roadMaterial
-        );
+    new THREE.BoxGeometry(24, 0.5, segmentLength),
+    roadMaterial
+);
         
         segment.position.set(0, -0.25, -20 + (i - numSegments/2) * segmentLength);
         scene.add(segment);
@@ -708,7 +708,7 @@ function handleMouseMove(event) {
     const mouseX = ((event.clientX - rect.left) / gameContainer.clientWidth) * 2 - 1;
     
     // Convert to world coordinates (wider range for 3-lane road)
-    targetPlayerX = mouseX * 8;
+    targetPlayerX = mouseX * 10;
     
     // Update cursor position
     if (mouseCursor) {
@@ -808,7 +808,7 @@ function animate(time) {
             player.position.x += (targetPlayerX - player.position.x) * 0.05;
             
             // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-9, Math.min(9, player.position.x));
+            player.position.x = Math.max(-11, Math.min(11, player.position.x)); 
             
             // Move all troops to follow the leader in formation
             for (let i = 1; i < troopMeshes.length; i++) {
