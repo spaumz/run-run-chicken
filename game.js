@@ -18,6 +18,7 @@ let lastSpawnTime = 0;
 let mouseCursor;
 let roadSegments = [];
 let waterLeft, waterRight;
+let effectsToUpdate = [];
 
 // Max troop visualization - Increased as requested
 const MAX_TROOPS_DISPLAYED = 30;
@@ -429,7 +430,6 @@ function updateTroops() {
     }
 }
 
-// Create door multiplier - Updated to match the reference image
 // Create multiplier door - Final version with transparent halo only
 function createMultiplier() {
     // Define multiplier types with more vibrant colors
@@ -611,80 +611,7 @@ function createMultiplier() {
     return doorGroup;
 }
 
-// Add this to your animate function to make the portals more dynamic
-// (Add this inside your animate function where you update multipliers)
-
-// Update each multiplier with animation effects
-for (let i = multipliers.length - 1; i >= 0; i--) {
-    const multiplier = multipliers[i];
-    
-    // Move multiplier towards player
-    multiplier.mesh.position.z += 0.2;
-    
-    // Animate portal elements
-    if (multiplier.glow) {
-        // Pulse the glow
-        const pulseSpeed = 0.003;
-        const elapsedTime = (Date.now() - multiplier.createTime) * pulseSpeed;
-        const pulseFactor = 0.2 * Math.sin(elapsedTime) + 1;
-        
-        multiplier.glow.scale.set(pulseFactor, pulseFactor, 1);
-        
-        // Make outer glow rotate
-        if (multiplier.outerGlow) {
-            multiplier.outerGlow.rotation.z += 0.01;
-        }
-    }
-    
-    // Animate particles if they exist
-    if (multiplier.particles) {
-        // Make particles slowly rotate
-        multiplier.particles.rotation.z += 0.005;
-    }
-    
-    // Check for collision with player
-    if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
-        Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
-        
-        // Apply multiplier effect
-        const oldTroops = troops;
-        troops = multiplier.effect(troops);
-        
-        // Add score based on the effect
-        if (troops > oldTroops) {
-            // Bonus for positive gain
-            score += (troops - oldTroops) * 10;
-            
-            // Increase fusion rate on significant troop gain
-            if (troops > oldTroops * 2 && troops > 50) {
-                fusionRate = Math.min(fusionRate + 1, 10);
-            }
-        } else {
-            // Some points even for negative multipliers
-            score += 5;
-        }
-        
-        // Update troops visualization
-        updateTroops();
-        
-        // Add visual effect for entering portal
-        createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
-        
-        // Remove multiplier
-        scene.remove(multiplier.mesh);
-        multipliers.splice(i, 1);
-        
-        updateUI();
-        checkGameOver();
-    }
-    // Remove if passed player
-    else if (multiplier.mesh.position.z > 10) {
-        scene.remove(multiplier.mesh);
-        multipliers.splice(i, 1);
-    }
-}
-
-// Add this new function for portal entry effect
+// Function for portal entry effect
 function createPortalEntryEffect(x, z, color) {
     // Create particles bursting outward
     const particleCount = 100;
@@ -759,23 +686,10 @@ function createPortalEntryEffect(x, z, color) {
         }
     };
     
-    // Add to some array of effects to update
+    // Add to array of effects to update
     effectsToUpdate.push(particleAnimation);
     
     return particleAnimation;
-}
-
-// Add this array at the top of your file with other globals
-let effectsToUpdate = [];
-
-// Add this to your animate function to update effects
-// (Add after your other updates)
-// Update visual effects
-for (let i = effectsToUpdate.length - 1; i >= 0; i--) {
-    const stillAlive = effectsToUpdate[i].update();
-    if (!stillAlive) {
-        effectsToUpdate.splice(i, 1);
-    }
 }
 
 // Window resize handler
@@ -956,6 +870,27 @@ function animate(time) {
             // Move multiplier towards player
             multiplier.mesh.position.z += 0.2;
             
+            // Animate portal elements
+            if (multiplier.glow) {
+                // Pulse the glow
+                const pulseSpeed = 0.003;
+                const elapsedTime = (Date.now() - multiplier.createTime) * pulseSpeed;
+                const pulseFactor = 0.2 * Math.sin(elapsedTime) + 1;
+                
+                multiplier.glow.scale.set(pulseFactor, pulseFactor, 1);
+                
+                // Make outer glow rotate
+                if (multiplier.outerGlow) {
+                    multiplier.outerGlow.rotation.z += 0.01;
+                }
+            }
+            
+            // Animate particles if they exist
+            if (multiplier.particles) {
+                // Make particles slowly rotate
+                multiplier.particles.rotation.z += 0.005;
+            }
+            
             // Check for collision with player
             if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
                 Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
@@ -980,6 +915,9 @@ function animate(time) {
                 
                 // Update troops visualization
                 updateTroops();
+                
+                // Add visual effect for entering portal
+                createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
                 
                 // Remove multiplier
                 scene.remove(multiplier.mesh);
@@ -1021,6 +959,14 @@ function animate(time) {
             const waterWave = Math.sin(now) * 0.2;
             waterLeft.position.y = -1 + waterWave;
             waterRight.position.y = -1 + waterWave;
+        }
+        
+        // Update visual effects
+        for (let i = effectsToUpdate.length - 1; i >= 0; i--) {
+            const stillAlive = effectsToUpdate[i].update();
+            if (!stillAlive) {
+                effectsToUpdate.splice(i, 1);
+            }
         }
     }
     
