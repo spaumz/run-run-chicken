@@ -25,11 +25,11 @@ const MAX_TROOPS_DISPLAYED = 30;
 
 // Colors for evolved troops
 const troopColors = [
-    0xffcc00,  // Yellow - Level 1 (Chicken color)
-    0xff9900,  // Orange - Level 2
-    0xff6600,  // Dark Orange - Level 3
-    0xff3300,  // Red-Orange - Level 4
-    0xff0000   // Red - Level 5
+    0xffff00,  // Jaune vif - Level 1
+    0xff6600,  // Orange vif - Level 2
+    0xff3399,  // Rose vif - Level 3
+    0x66ff33,  // Vert lime - Level 4
+    0x00ffff   // Cyan - Level 5
 ];
 
 // Get DOM elements
@@ -272,8 +272,12 @@ function createTextTexture(text, backgroundColor, isPositive) {
 }
 
 // Create a chicken based on level
+// Create a chicken based on level
 function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const troopGroup = new THREE.Group();
+    
+    // Rotation des poulets pour qu'ils regardent vers la caméra
+    troopGroup.rotation.y = Math.PI; // Cette ligne fait tourner le poulet de 180°
     
     // Size increases with level
     const sizeMultiplier = 1 + (level * 0.25);
@@ -370,6 +374,38 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         troopGroup.add(crown);
     }
     
+    // Ajout d'un effet de particules pour les poulets évolués
+    if (level >= 2) {
+        // Ajout d'un effet de particules pour les poulets évolués
+        const particleCount = 10 + level * 5;
+        const particleGeometry = new THREE.BufferGeometry();
+        const particlePositions = new Float32Array(particleCount * 3);
+        
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 0.6 * sizeMultiplier + Math.random() * 0.3;
+            particlePositions[i3] = Math.cos(angle) * radius;
+            particlePositions[i3 + 1] = 0.5 * sizeMultiplier + Math.random() * 0.5;
+            particlePositions[i3 + 2] = Math.sin(angle) * radius;
+        }
+        
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        
+        const particleMaterial = new THREE.PointsMaterial({
+            color: troopColors[level],
+            size: 0.05 * sizeMultiplier,
+            transparent: true,
+            opacity: 0.7
+        });
+        
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        troopGroup.add(particles);
+        
+        // Stocker les particules pour l'animation
+        troopGroup.particles = particles;
+    }
+    
     // Set position
     troopGroup.position.set(position.x, 0, position.z);
     troopGroup.level = level;
@@ -463,7 +499,14 @@ function createMultiplier() {
     ];
     
     // Randomly select type
-    const typeIndex = Math.floor(Math.random() * types.length);
+    let typeIndex;
+if (Math.random() < 0.65) { // 65% de chance d'avoir un malus
+    // Sélection parmi les malus (index 1 et 3)
+    typeIndex = Math.random() < 0.5 ? 1 : 3; // - ou ÷
+} else {
+    // Sélection parmi les bonus (index 0 et 2)
+    typeIndex = Math.random() < 0.5 ? 0 : 2; // + ou ×
+}
     const type = types[typeIndex];
     
     // Generate value
@@ -599,7 +642,7 @@ function createMultiplier() {
     
     // Set random position on x-axis (wider range for 3-lane road)
     const x = Math.random() * 16 - 8; // Between -8 and 8
-    doorGroup.position.set(x, 0, -60);
+    doorGroup.position.set(x, 0, -80);
     
     // Add to scene and multipliers array
     scene.add(doorGroup);
