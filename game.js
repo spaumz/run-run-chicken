@@ -430,13 +430,14 @@ function updateTroops() {
 }
 
 // Create door multiplier - Updated to match the reference image
+// Create multiplier door - Updated to match the new reference image
 function createMultiplier() {
-    // Define multiplier types
+    // Define multiplier types - updated to match reference image colors
     const types = [
-        { op: "+", color: 0x00cc44, min: 1, max: 5 },  // Addition (green)
-        { op: "-", color: 0xcc0000, min: 1, max: 3 },  // Subtraction (red)
-        { op: "×", color: 0x00aaff, min: 2, max: 5 },  // Multiplication (blue)
-        { op: "÷", color: 0xffcc00, min: 2, max: 3 }   // Division (yellow)
+        { op: "+", color: 0x00aaff, min: 1, max: 5, positive: true },  // Addition (blue)
+        { op: "-", color: 0xff0000, min: 1, max: 10, positive: false }, // Subtraction (red)
+        { op: "×", color: 0x00aaff, min: 2, max: 5, positive: true },  // Multiplication (blue)
+        { op: "÷", color: 0xff0000, min: 2, max: 3, positive: false }  // Division (red)
     ];
     
     // Randomly select type
@@ -449,129 +450,123 @@ function createMultiplier() {
     // Create door group
     const doorGroup = new THREE.Group();
     
-    // Get color hex as string
-    const colorHex = "#" + type.color.toString(16).padStart(6, "0");
-    const isPositive = (type.op === "+" || type.op === "×");
+    // Create the portal structure
     
-    // Create the main blue panel - similar to the reference image
-    const panelGeometry = new THREE.BoxGeometry(4, 4, 0.2);
-    const panelMaterial = new THREE.MeshPhongMaterial({
-        color: 0x00aaff, // Blue color like in the reference
-        shininess: 90,
+    // 1. Create the pillars on each side (like in the reference image)
+    const pillarGeometry = new THREE.BoxGeometry(1.5, 8, 1.5);
+    const pillarMaterial = new THREE.MeshPhongMaterial({
+        color: type.positive ? 0x0066cc : 0xcc0000, // Blue for positive, red for negative
+        shininess: 80
+    });
+    
+    // Left pillar
+    const leftPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+    leftPillar.position.set(-6, 4, 0);
+    doorGroup.add(leftPillar);
+    
+    // Right pillar
+    const rightPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+    rightPillar.position.set(6, 4, 0);
+    doorGroup.add(rightPillar);
+    
+    // 2. Create a horizontal beam connecting the pillars at the top
+    const beamGeometry = new THREE.BoxGeometry(14, 1, 1.5);
+    const beamMaterial = new THREE.MeshPhongMaterial({
+        color: type.positive ? 0x0066cc : 0xcc0000,
+        shininess: 80
+    });
+    const topBeam = new THREE.Mesh(beamGeometry, beamMaterial);
+    topBeam.position.set(0, 8, 0);
+    doorGroup.add(topBeam);
+    
+    // 3. Create the transparent halo in the middle
+    const haloGeometry = new THREE.PlaneGeometry(10, 6);
+    const haloMaterial = new THREE.MeshBasicMaterial({
+        color: type.color,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.3,
+        side: THREE.DoubleSide
     });
-    const panel = new THREE.Mesh(panelGeometry, panelMaterial);
-    panel.position.y = 3;
-    doorGroup.add(panel);
+    const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+    halo.position.set(0, 4, 0);
+    doorGroup.add(halo);
     
-    // Add corner elements to make it look like the reference
-    const cornerSize = 0.4;
-    const cornerGeometry = new THREE.BoxGeometry(cornerSize, cornerSize, 0.3);
-    const cornerMaterial = new THREE.MeshPhongMaterial({
-        color: 0x0066cc, // Darker blue for contrast
-        shininess: 100
-    });
-    
-    // Add corners to make it look like the reference image
-    const topLeftCorner = new THREE.Mesh(cornerGeometry, cornerMaterial);
-    topLeftCorner.position.set(-2 + cornerSize/2, 5 - cornerSize/2, 0.1);
-    doorGroup.add(topLeftCorner);
-    
-    const topRightCorner = new THREE.Mesh(cornerGeometry, cornerMaterial);
-    topRightCorner.position.set(2 - cornerSize/2, 5 - cornerSize/2, 0.1);
-    doorGroup.add(topRightCorner);
-    
-    const bottomLeftCorner = new THREE.Mesh(cornerGeometry, cornerMaterial);
-    bottomLeftCorner.position.set(-2 + cornerSize/2, 1 + cornerSize/2, 0.1);
-    doorGroup.add(bottomLeftCorner);
-    
-    const bottomRightCorner = new THREE.Mesh(cornerGeometry, cornerMaterial);
-    bottomRightCorner.position.set(2 - cornerSize/2, 1 + cornerSize/2, 0.1);
-    doorGroup.add(bottomRightCorner);
-    
-    // White border around the panel
-    const borderGeometry = new THREE.BoxGeometry(4.2, 4.2, 0.15);
-    const borderMaterial = new THREE.MeshPhongMaterial({
-        color: 0xffffff,
+    // 4. Add a glowing edge to the halo
+    const edgeGeometry = new THREE.EdgesGeometry(haloGeometry);
+    const edgeMaterial = new THREE.LineBasicMaterial({
+        color: type.color,
+        linewidth: 2,
         transparent: true,
-        opacity: 0.9
+        opacity: 0.8
     });
-    const border = new THREE.Mesh(borderGeometry, borderMaterial);
-    border.position.y = 3;
-    border.position.z = -0.05;
-    doorGroup.add(border);
+    const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+    edges.position.set(0, 4, 0.05);
+    doorGroup.add(edges);
     
-    // Create the multiplier text (exactly like in the reference image)
-    const textCanvas = document.createElement("canvas");
-    textCanvas.width = 512;
-    textCanvas.height = 512;
-    const ctx = textCanvas.getContext("2d");
+    // 5. Create text for the multiplier value
+    const valueText = document.createElement("canvas");
+    valueText.width = 512;
+    valueText.height = 512;
+    const ctx = valueText.getContext("2d");
     
-    // Background color - blue for the reference image
-    ctx.fillStyle = "#00aaff";
-    ctx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+    // Clear canvas
+    ctx.clearRect(0, 0, valueText.width, valueText.height);
     
-    // Add slight gradient
-    const gradient = ctx.createLinearGradient(0, 0, 0, textCanvas.height);
-    gradient.addColorStop(0, "rgba(255, 255, 255, 0.3)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0.1)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+    // Create the operator + value text (like in the reference image)
+    ctx.fillStyle = "rgba(255, 255, 255, 0)"; // Transparent background
+    ctx.fillRect(0, 0, valueText.width, valueText.height);
     
-    // Draw the multiplier text in white with shadow, LARGE and BOLD like in reference
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    // Draw the value text - LARGE and WHITE as in reference image
+    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
     ctx.shadowBlur = 15;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 250px Arial";
+    ctx.font = "bold 300px Arial";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     
-    // Make the text exactly like in the reference image (big and centered)
-    ctx.fillText(type.op + value, textCanvas.width / 2, textCanvas.height / 2);
+    // Format the text to match the reference (e.g., "-8" or "+5")
+    const displayText = type.op + value;
+    ctx.fillText(displayText, valueText.width / 2, valueText.height / 2);
     
-    const textTexture = new THREE.CanvasTexture(textCanvas);
+    const textTexture = new THREE.CanvasTexture(valueText);
     const textMaterial = new THREE.MeshBasicMaterial({
         map: textTexture,
         transparent: true,
-        opacity: 1
+        depthWrite: false
     });
     
-    const text = new THREE.Mesh(
-        new THREE.PlaneGeometry(3.8, 3.8),
+    const textPlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(8, 5),
         textMaterial
     );
-    text.position.set(0, 3, 0.15);
-    doorGroup.add(text);
+    textPlane.position.set(0, 4, 0.2);
+    doorGroup.add(textPlane);
     
-    // Add a glow effect around the panel
-    const glowGeometry = new THREE.RingGeometry(2.1, 2.3, 32);
+    // 6. Add glowing light effect around the halo
+    const glowGeometry = new THREE.TorusGeometry(5.2, 0.2, 16, 32);
     const glowMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff, 
+        color: type.color,
         transparent: true,
-        opacity: 0.6,
-        side: THREE.DoubleSide
+        opacity: 0.5
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.set(0, 3, 0.2);
+    glow.position.set(0, 4, 0.1);
     glow.rotation.x = Math.PI / 2;
     doorGroup.add(glow);
     
-    // Create a visual indication for the door hitbox
-    const hitboxOutline = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 6, 0.1),
-        new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.2,
-            wireframe: true
-        })
-    );
-    hitboxOutline.position.y = 3;
-    hitboxOutline.position.z = 0.3;
-    doorGroup.add(hitboxOutline);
+    // 7. Add a secondary internal glow effect
+    const innerGlowGeometry = new THREE.TorusGeometry(4.8, 0.15, 16, 32);
+    const innerGlowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3
+    });
+    const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
+    innerGlow.position.set(0, 4, 0.15);
+    innerGlow.rotation.x = Math.PI / 2;
+    doorGroup.add(innerGlow);
     
     // Set random position on x-axis (wider range for 3-lane road)
     const x = Math.random() * 16 - 8; // Between -8 and 8
@@ -598,7 +593,8 @@ function createMultiplier() {
         type: type.op,
         value: value,
         effect: effect,
-        color: type.color
+        color: type.color,
+        positive: type.positive
     });
     
     return doorGroup;
