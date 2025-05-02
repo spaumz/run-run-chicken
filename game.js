@@ -430,14 +430,14 @@ function updateTroops() {
 }
 
 // Create door multiplier - Updated to match the reference image
-// Create multiplier door - Updated to match the new reference image
+// Create multiplier door - Final version with transparent halo only
 function createMultiplier() {
-    // Define multiplier types - updated to match reference image colors
+    // Define multiplier types with more vibrant colors
     const types = [
-        { op: "+", color: 0x00aaff, min: 1, max: 5, positive: true },  // Addition (blue)
-        { op: "-", color: 0xff0000, min: 1, max: 10, positive: false }, // Subtraction (red)
-        { op: "×", color: 0x00aaff, min: 2, max: 5, positive: true },  // Multiplication (blue)
-        { op: "÷", color: 0xff0000, min: 2, max: 3, positive: false }  // Division (red)
+        { op: "+", color: 0x00ddff, min: 1, max: 5, positive: true },  // Brighter blue for addition
+        { op: "-", color: 0xff2222, min: 1, max: 10, positive: false }, // Vibrant red for subtraction
+        { op: "×", color: 0x00ddff, min: 2, max: 5, positive: true },  // Brighter blue for multiplication
+        { op: "÷", color: 0xff2222, min: 2, max: 3, positive: false }  // Vibrant red for division
     ];
     
     // Randomly select type
@@ -450,60 +450,31 @@ function createMultiplier() {
     // Create door group
     const doorGroup = new THREE.Group();
     
-    // Create the portal structure
-    
-    // 1. Create the pillars on each side (like in the reference image)
-    const pillarGeometry = new THREE.BoxGeometry(1.5, 8, 1.5);
-    const pillarMaterial = new THREE.MeshPhongMaterial({
-        color: type.positive ? 0x0066cc : 0xcc0000, // Blue for positive, red for negative
-        shininess: 80
-    });
-    
-    // Left pillar
-    const leftPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-    leftPillar.position.set(-6, 4, 0);
-    doorGroup.add(leftPillar);
-    
-    // Right pillar
-    const rightPillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-    rightPillar.position.set(6, 4, 0);
-    doorGroup.add(rightPillar);
-    
-    // 2. Create a horizontal beam connecting the pillars at the top
-    const beamGeometry = new THREE.BoxGeometry(14, 1, 1.5);
-    const beamMaterial = new THREE.MeshPhongMaterial({
-        color: type.positive ? 0x0066cc : 0xcc0000,
-        shininess: 80
-    });
-    const topBeam = new THREE.Mesh(beamGeometry, beamMaterial);
-    topBeam.position.set(0, 8, 0);
-    doorGroup.add(topBeam);
-    
-    // 3. Create the transparent halo in the middle
-    const haloGeometry = new THREE.PlaneGeometry(10, 6);
+    // Create just the transparent halo (no pillars) with more vibrant color
+    const haloGeometry = new THREE.PlaneGeometry(8, 6); // Less wide as requested
     const haloMaterial = new THREE.MeshBasicMaterial({
         color: type.color,
         transparent: true,
-        opacity: 0.3,
+        opacity: 0.4, // Slightly more opaque for more vibrant look
         side: THREE.DoubleSide
     });
     const halo = new THREE.Mesh(haloGeometry, haloMaterial);
     halo.position.set(0, 4, 0);
     doorGroup.add(halo);
     
-    // 4. Add a glowing edge to the halo
+    // Add a brighter glowing edge to the halo
     const edgeGeometry = new THREE.EdgesGeometry(haloGeometry);
     const edgeMaterial = new THREE.LineBasicMaterial({
         color: type.color,
-        linewidth: 2,
+        linewidth: 3, // Thicker line for more visibility
         transparent: true,
-        opacity: 0.8
+        opacity: 0.9 // More visible
     });
     const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
     edges.position.set(0, 4, 0.05);
     doorGroup.add(edges);
     
-    // 5. Create text for the multiplier value
+    // Create text for the multiplier value
     const valueText = document.createElement("canvas");
     valueText.width = 512;
     valueText.height = 512;
@@ -512,15 +483,15 @@ function createMultiplier() {
     // Clear canvas
     ctx.clearRect(0, 0, valueText.width, valueText.height);
     
-    // Create the operator + value text (like in the reference image)
-    ctx.fillStyle = "rgba(255, 255, 255, 0)"; // Transparent background
-    ctx.fillRect(0, 0, valueText.width, valueText.height);
+    // Make the text more vibrant and prominent
+    // Draw the value text with enhanced glow effects
+    // First create a glow effect
+    ctx.shadowColor = type.positive ? "rgba(0, 200, 255, 0.8)" : "rgba(255, 50, 50, 0.8)";
+    ctx.shadowBlur = 25; // Increased blur for more glow
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     
-    // Draw the value text - LARGE and WHITE as in reference image
-    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 4;
+    // Draw text in pure white for maximum contrast
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 300px Arial";
     ctx.textAlign = "center";
@@ -528,6 +499,15 @@ function createMultiplier() {
     
     // Format the text to match the reference (e.g., "-8" or "+5")
     const displayText = type.op + value;
+    
+    // Draw the text multiple times for stronger glow effect
+    for (let i = 0; i < 3; i++) {
+        ctx.shadowBlur = 15 + i * 10;
+        ctx.fillText(displayText, valueText.width / 2, valueText.height / 2);
+    }
+    
+    // Final text layer without shadow for crisp edges
+    ctx.shadowBlur = 0;
     ctx.fillText(displayText, valueText.width / 2, valueText.height / 2);
     
     const textTexture = new THREE.CanvasTexture(valueText);
@@ -538,35 +518,62 @@ function createMultiplier() {
     });
     
     const textPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(8, 5),
+        new THREE.PlaneGeometry(7, 5), // Proportional to the halo
         textMaterial
     );
     textPlane.position.set(0, 4, 0.2);
     doorGroup.add(textPlane);
     
-    // 6. Add glowing light effect around the halo
-    const glowGeometry = new THREE.TorusGeometry(5.2, 0.2, 16, 32);
+    // Enhanced glowing effect around the halo - more vibrant
+    const glowGeometry = new THREE.TorusGeometry(4.2, 0.3, 16, 32);
     const glowMaterial = new THREE.MeshBasicMaterial({
         color: type.color,
         transparent: true,
-        opacity: 0.5
+        opacity: 0.7 // Brighter glow
     });
     const glow = new THREE.Mesh(glowGeometry, glowMaterial);
     glow.position.set(0, 4, 0.1);
     glow.rotation.x = Math.PI / 2;
     doorGroup.add(glow);
     
-    // 7. Add a secondary internal glow effect
-    const innerGlowGeometry = new THREE.TorusGeometry(4.8, 0.15, 16, 32);
-    const innerGlowMaterial = new THREE.MeshBasicMaterial({
+    // Add an outer glow for more dramatic effect
+    const outerGlowGeometry = new THREE.TorusGeometry(4.5, 0.2, 16, 32);
+    const outerGlowMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
-        opacity: 0.3
+        opacity: 0.5
     });
-    const innerGlow = new THREE.Mesh(innerGlowGeometry, innerGlowMaterial);
-    innerGlow.position.set(0, 4, 0.15);
-    innerGlow.rotation.x = Math.PI / 2;
-    doorGroup.add(innerGlow);
+    const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
+    outerGlow.position.set(0, 4, 0.12);
+    outerGlow.rotation.x = Math.PI / 2;
+    doorGroup.add(outerGlow);
+    
+    // Add particle effect for more visual impact
+    const particleCount = 50;
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    
+    for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        // Position particles in a circular pattern around the halo
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 3.8 + Math.random() * 1.5;
+        particlePositions[i3] = Math.cos(angle) * radius;
+        particlePositions[i3 + 1] = 4 + (Math.random() * 2 - 1) * 2.5; // y position around center
+        particlePositions[i3 + 2] = Math.sin(angle) * radius * 0.2; // slight depth
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    
+    const particleMaterial = new THREE.PointsMaterial({
+        color: type.color,
+        size: 0.1,
+        transparent: true,
+        opacity: 0.7
+    });
+    
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    doorGroup.add(particles);
     
     // Set random position on x-axis (wider range for 3-lane road)
     const x = Math.random() * 16 - 8; // Between -8 and 8
@@ -587,17 +594,188 @@ function createMultiplier() {
         effect = t => Math.max(1, Math.floor(t / value));
     }
     
-    // Store multiplier info
+    // Store multiplier info with the object for animation
     multipliers.push({
         mesh: doorGroup,
         type: type.op,
         value: value,
         effect: effect,
         color: type.color,
-        positive: type.positive
+        positive: type.positive,
+        particles: particles,
+        outerGlow: outerGlow,
+        glow: glow,
+        createTime: Date.now()
     });
     
     return doorGroup;
+}
+
+// Add this to your animate function to make the portals more dynamic
+// (Add this inside your animate function where you update multipliers)
+
+// Update each multiplier with animation effects
+for (let i = multipliers.length - 1; i >= 0; i--) {
+    const multiplier = multipliers[i];
+    
+    // Move multiplier towards player
+    multiplier.mesh.position.z += 0.2;
+    
+    // Animate portal elements
+    if (multiplier.glow) {
+        // Pulse the glow
+        const pulseSpeed = 0.003;
+        const elapsedTime = (Date.now() - multiplier.createTime) * pulseSpeed;
+        const pulseFactor = 0.2 * Math.sin(elapsedTime) + 1;
+        
+        multiplier.glow.scale.set(pulseFactor, pulseFactor, 1);
+        
+        // Make outer glow rotate
+        if (multiplier.outerGlow) {
+            multiplier.outerGlow.rotation.z += 0.01;
+        }
+    }
+    
+    // Animate particles if they exist
+    if (multiplier.particles) {
+        // Make particles slowly rotate
+        multiplier.particles.rotation.z += 0.005;
+    }
+    
+    // Check for collision with player
+    if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
+        Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
+        
+        // Apply multiplier effect
+        const oldTroops = troops;
+        troops = multiplier.effect(troops);
+        
+        // Add score based on the effect
+        if (troops > oldTroops) {
+            // Bonus for positive gain
+            score += (troops - oldTroops) * 10;
+            
+            // Increase fusion rate on significant troop gain
+            if (troops > oldTroops * 2 && troops > 50) {
+                fusionRate = Math.min(fusionRate + 1, 10);
+            }
+        } else {
+            // Some points even for negative multipliers
+            score += 5;
+        }
+        
+        // Update troops visualization
+        updateTroops();
+        
+        // Add visual effect for entering portal
+        createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
+        
+        // Remove multiplier
+        scene.remove(multiplier.mesh);
+        multipliers.splice(i, 1);
+        
+        updateUI();
+        checkGameOver();
+    }
+    // Remove if passed player
+    else if (multiplier.mesh.position.z > 10) {
+        scene.remove(multiplier.mesh);
+        multipliers.splice(i, 1);
+    }
+}
+
+// Add this new function for portal entry effect
+function createPortalEntryEffect(x, z, color) {
+    // Create particles bursting outward
+    const particleCount = 100;
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(particleCount * 3);
+    const particleVelocities = [];
+    
+    for (let i = 0; i < particleCount; i++) {
+        const i3 = i * 3;
+        // Start particles at player position
+        particlePositions[i3] = x;
+        particlePositions[i3 + 1] = 0.5 + Math.random();
+        particlePositions[i3 + 2] = z;
+        
+        // Random velocity in all directions
+        particleVelocities.push({
+            x: (Math.random() - 0.5) * 0.4,
+            y: Math.random() * 0.2,
+            z: (Math.random() - 0.5) * 0.4
+        });
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    
+    const particleMaterial = new THREE.PointsMaterial({
+        color: color,
+        size: 0.2,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particleSystem);
+    
+    // Create animation for the particles
+    const particleAnimation = {
+        system: particleSystem,
+        geometry: particleGeometry,
+        velocities: particleVelocities,
+        life: 60,  // Frames to live
+        update: function() {
+            const positions = this.geometry.attributes.position.array;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const vel = this.velocities[i];
+                
+                // Update position with velocity
+                positions[i3] += vel.x;
+                positions[i3 + 1] += vel.y;
+                positions[i3 + 2] += vel.z;
+                
+                // Add gravity effect
+                vel.y -= 0.01;
+            }
+            
+            this.geometry.attributes.position.needsUpdate = true;
+            
+            // Fade out
+            this.system.material.opacity = this.life / 60;
+            
+            // Decrease life
+            this.life--;
+            
+            // Remove when done
+            if (this.life <= 0) {
+                scene.remove(this.system);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    // Add to some array of effects to update
+    effectsToUpdate.push(particleAnimation);
+    
+    return particleAnimation;
+}
+
+// Add this array at the top of your file with other globals
+let effectsToUpdate = [];
+
+// Add this to your animate function to update effects
+// (Add after your other updates)
+// Update visual effects
+for (let i = effectsToUpdate.length - 1; i >= 0; i--) {
+    const stillAlive = effectsToUpdate[i].update();
+    if (!stillAlive) {
+        effectsToUpdate.splice(i, 1);
+    }
 }
 
 // Window resize handler
