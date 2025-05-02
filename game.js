@@ -60,13 +60,13 @@ function init() {
     
     // Create camera - Vue plus plongeante
 camera = new THREE.PerspectiveCamera(
-    90,  // Angle de vue plus large
+    80,  // Angle légèrement réduit pour un meilleur zoom
     gameContainer.clientWidth / gameContainer.clientHeight, 
     0.1, 
     1000
 );
-camera.position.set(0, 22, 8); // Position plus haute et légèrement plus proche
-camera.lookAt(0, 0, -15);      // Regarder plus vers l'avant de la route
+camera.position.set(0, 18, 5); // Position plus proche de la route (z réduit)
+camera.lookAt(0, 0, -10);     // Point de focus plus proche
     
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -178,10 +178,10 @@ function createRoadTexture() {
     ctx.fillStyle = "#555555";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Lane markings (3 lanes)
+    // Lane markings (3 lanes) avec marquages plus longs
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([20, 20]);
+    ctx.lineWidth = 8; // Ligne plus épaisse (était 5)
+    ctx.setLineDash([40, 20]); // Marquages plus longs (était [20, 20])
     
     // Left lane divider
     ctx.beginPath();
@@ -193,6 +193,28 @@ function createRoadTexture() {
     ctx.beginPath();
     ctx.moveTo(canvas.width * 2 / 3, 0);
     ctx.lineTo(canvas.width * 2 / 3, canvas.height);
+    ctx.stroke();
+    
+    // Ajout de marquages au centre de chaque voie pour plus de détail
+    ctx.setLineDash([10, 50]); // Marquages courts
+    ctx.lineWidth = 4; // Ligne plus fine
+    
+    // Marquage centre voie gauche
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 6, 0);
+    ctx.lineTo(canvas.width / 6, canvas.height);
+    ctx.stroke();
+    
+    // Marquage centre voie centrale
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+    
+    // Marquage centre voie droite
+    ctx.beginPath();
+    ctx.moveTo(canvas.width * 5 / 6, 0);
+    ctx.lineTo(canvas.width * 5 / 6, canvas.height);
     ctx.stroke();
     
     return new THREE.CanvasTexture(canvas);
