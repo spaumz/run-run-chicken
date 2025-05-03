@@ -117,13 +117,22 @@ function init() {
     
     // Create rails - Route élargie et bordure saumon/corail
     const railMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xEB806C,  // Couleur saumon/corail demandée
+        color: 0xFF5733,  // Rouge plus vif
         shininess: 60
     });
     
     // Création de rambardes de pont réalistes sur les côtés
     createRealisticBridgeRailings(-15, -40); // Élargi à -15 au lieu de -13
     createRealisticBridgeRailings(15, -40);  // Élargi à 15 au lieu de 13
+    
+    // Après la création des éléments du pont, enregistrer leurs positions initiales
+    for (let i = 0; i < bridgeElements.length; i++) {
+        const element = bridgeElements[i];
+        if (!element.userData) {
+            element.userData = {};
+        }
+        element.userData.initialZ = element.position.z;
+    }
     
     // Create mouse cursor
     createMouseCursor();
@@ -209,7 +218,7 @@ function createSkybox() {
 function createBridgePylons() {
     // Matériaux pour les pylônes
     const pylonMaterial = new THREE.MeshPhongMaterial({
-        color: 0xEB806C,
+        color: 0xFF5733, // Rouge plus vif
         shininess: 30
     });
     
@@ -278,6 +287,11 @@ function createBridgePylons() {
     
     const pylon3 = createPylon(20);
     scene.add(pylon3);
+    
+    // Stocker les positions initiales pour l'animation fluide
+    pylon1.userData = { initialZ: -60 };
+    pylon2.userData = { initialZ: -120 };
+    pylon3.userData = { initialZ: 20 };
     
     // Ajouter les pylônes au tableau des éléments du pont
     bridgeElements.push(pylon1);
@@ -452,7 +466,7 @@ function createFlyingBirds() {
 function createSuspensionCables() {
     // Matériau pour les câbles
     const cableMaterial = new THREE.MeshPhongMaterial({
-        color: 0x444444,
+        color: 0xDD3333, // Rouge plus foncé pour les câbles
         shininess: 80
     });
     
@@ -501,6 +515,9 @@ function createSuspensionCables() {
     
     scene.add(cablesGroup);
     
+    // Stocker la position initiale
+    cablesGroup.userData = { initialZ: -50 };
+    
     // Ajouter le groupe de câbles au tableau des éléments du pont
     bridgeElements.push(cablesGroup);
 }
@@ -536,15 +553,15 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Groupe pour les rambardes
     const railingGroup = new THREE.Group();
     
-    // Matériau pour les rambardes principales (rouge-saumon comme demandé)
+    // Matériau pour les rambardes principales (rouge plus vif)
     const railingMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xEB806C,
+        color: 0xFF5733, // Rouge plus vif
         shininess: 60
     });
     
     // Matériau pour les câbles
     const cableMaterial = new THREE.MeshPhongMaterial({
-        color: 0xDD7055,
+        color: 0xDD3333, // Rouge plus foncé pour les câbles
         shininess: 80
     });
     
@@ -609,6 +626,9 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Positionner le groupe complet à l'emplacement x demandé
     railingGroup.position.x = xPos;
     
+    // Stocker la position initiale pour l'animation fluide
+    railingGroup.userData = { initialZ: zPos };
+    
     // Ajouter à la liste des éléments du pont au lieu de roadSegments
     bridgeElements.push(railingGroup);
     
@@ -622,15 +642,15 @@ function createRealisticBridgeRailings(xPos, zPos) {
 function createRoadSegments() {
     // Augmenter le nombre de segments pour éviter les trous
     const segmentLength = 25;
-    const numSegments = 12; // Augmenté de 8 à 12 pour plus de couverture
-    const segmentOverlap = 0.5; // Légère superposition pour éviter les trous
+    const numSegments = 16; // Augmenté de 12 à 16 pour plus de couverture
+    const segmentOverlap = 1.0; // Augmenté de 0.5 à 1.0 pour plus de chevauchement
     
     // Texture de route
     const roadTexture = createRoadTexture();
     const roadMaterial = new THREE.MeshPhongMaterial({
         map: roadTexture,
-        color: 0x444444, // Plus foncé, comme sur les images de référence
-        shininess: 30
+        color: 0x333333, // Gris plus foncé pour la route
+        shininess: 20
     });
     
     // Créer les segments avec léger chevauchement - PLUS LARGES
@@ -648,19 +668,19 @@ function createRoadSegments() {
     
     // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
     const transitionSegment1 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 10), // Élargi à 30 au lieu de 26
+        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
         roadMaterial
     );
-    transitionSegment1.position.set(0, -0.25, 20);
+    transitionSegment1.position.set(0, -0.25, 25); // Légèrement plus loin
     transitionSegment1.receiveShadow = true;
     scene.add(transitionSegment1);
     roadSegments.push(transitionSegment1);
     
     const transitionSegment2 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 10), // Élargi à 30 au lieu de 26
+        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
         roadMaterial
     );
-    transitionSegment2.position.set(0, -0.25, -140);
+    transitionSegment2.position.set(0, -0.25, -150); // Plus loin en arrière
     transitionSegment2.receiveShadow = true;
     scene.add(transitionSegment2);
     roadSegments.push(transitionSegment2);
@@ -678,26 +698,41 @@ function updateRoadSegments() {
         
         // Si segment a dépassé la caméra, le replacer à l'arrière
         if (segment.position.z > 40) {
-            // Calculer la position la plus reculée parmi tous les segments
+            // Identifier le segment le plus en arrière
             let farthestZ = 100;
+            let farthestIndex = -1;
             for (let j = 0; j < roadSegments.length; j++) {
                 if (roadSegments[j].position.z < farthestZ) {
                     farthestZ = roadSegments[j].position.z;
+                    farthestIndex = j;
                 }
             }
-            // Placer le segment juste après le plus reculé
-            segment.position.z = farthestZ - segment.geometry.parameters.depth + 0.5;
+            
+            // Placer le segment juste après le plus reculé avec un peu de chevauchement
+            const depth = segment.geometry.parameters.depth;
+            segment.position.z = farthestZ - depth + 1.0; // Chevauchement de 1.0 unité
         }
     }
+    
+    // Animation fluide des éléments du pont
+    const bridgeLength = 200; // Longueur totale du trajet du pont
     
     // Faire avancer tous les éléments du pont
     for (let i = 0; i < bridgeElements.length; i++) {
         const element = bridgeElements[i];
+        
+        // Position initiale de l'élément
+        const initialZ = element.userData?.initialZ || 0;
+        
+        // Avancer l'élément
         element.position.z += moveSpeed;
         
-        // Si l'élément a dépassé la caméra, le replacer à l'arrière
+        // Si l'élément a dépassé la caméra, le repositionner de manière fluide
         if (element.position.z > 80) {
-            element.position.z -= 200; // Replacer loin derrière
+            // Au lieu de le repositionner brutalement, calculer le décalage exact
+            // pour qu'il se retrouve exactement une longueur bridgeLength en arrière
+            const offset = Math.ceil((element.position.z - initialZ) / bridgeLength) * bridgeLength;
+            element.position.z -= offset;
         }
     }
 }
@@ -710,7 +745,7 @@ function createRoadTexture() {
     const ctx = canvas.getContext("2d");
     
     // Road background
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = "#333333"; // Gris foncé
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Lane markings (3 lanes) avec marquages plus longs
@@ -1250,9 +1285,9 @@ function updateTroops() {
     }
     
     // Create troops of each level in formation with better spacing
-    // Position avancée (au lieu de reculée)
+    // Position légèrement reculée
     let xPos = -6;
-    let zPos = -2; // Position avancée (était -12)
+    let zPos = -3; // Reculé de -2 à -3
     const xSpacing = 2.5; 
     const zSpacing = 2.5; 
     
@@ -1277,7 +1312,7 @@ function updateTroops() {
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -2 }); // Position avancée (était -12)
+        const troop = createTroopMesh(0, { x: 0, z: -3 }); // Reculé de -2 à -3
         troopMeshes.push(troop);
         player = troop;
     }
@@ -1800,7 +1835,7 @@ function animate(time) {
             mouseCursor.rotation.z += 0.01;
         }
         
-        // Update road segments - Nouvelle fonction
+        // Update road segments - Fonction améliorée
         updateRoadSegments();
         
         // Add water animation
