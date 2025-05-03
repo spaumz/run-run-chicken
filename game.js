@@ -648,120 +648,6 @@ function createRealisticBridgeRailings(xPos, zPos) {
 
 // Fonction pour créer une texture de route
 function createRoadTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d');
-    
-    // Fond gris foncé pour l'asphalte
-    ctx.fillStyle = '#444444';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Lignes blanches au milieu
-    ctx.fillStyle = '#ffffff';
-    const dashLength = 30;
-    const dashGap = 20;
-    for (let y = 0; y < canvas.height; y += dashLength + dashGap) {
-        ctx.fillRect(canvas.width / 2 - 5, y, 10, dashLength);
-    }
-    
-    // Lignes de côté continues
-    ctx.fillRect(20, 0, 5, canvas.height);
-    ctx.fillRect(canvas.width - 25, 0, 5, canvas.height);
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 10);
-    
-    return texture;
-}
-
-// Fonction améliorée pour créer des segments de route sans trous
-function createRoadSegments() {
-    // Utilisons une taille fixe pour tous les segments
-    const segmentLength = 25;
-    const numSegments = 20;
-    
-    // Textures avec les nouvelles couleurs
-    const roadTexture = createRoadTexture();
-    const roadMaterial = new THREE.MeshPhongMaterial({
-        map: roadTexture,
-        color: 0xffffff, // Blanc pour préserver la texture
-        shininess: 20
-    });
-    
-    // CHANGEMENTS IMPORTANTS: Plus de chevauchement, alignement parfait
-    roadSegments = []; // Vider le tableau pour éviter les doublons
-    
-    // Créer un groupe unique pour tous les segments de route
-    const roadGroup = new THREE.Group();
-    scene.add(roadGroup);
-    
-    // Créer les segments en les positionnant exactement bout à bout
-    for (let i = 0; i < numSegments; i++) {
-        const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(30, 0.5, segmentLength),
-            roadMaterial
-        );
-        
-        // Position exacte: chaque segment est placé exactement à la fin du précédent
-        segment.position.set(0, -0.25, -150 + (i * segmentLength));
-        segment.receiveShadow = true;
-        
-        // Stocker la position z initiale
-        segment.userData = { 
-            initialZ: segment.position.z,
-            segmentLength: segmentLength
-        };
-        
-        roadGroup.add(segment);
-        roadSegments.push(segment);
-    }
-    
-    // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
-    const transitionSegment1 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment1.position.set(0, -0.25, 25); // Légèrement plus loin
-    transitionSegment1.receiveShadow = true;
-    scene.add(transitionSegment1);
-    roadSegments.push(transitionSegment1);
-    
-    const transitionSegment2 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment2.position.set(0, -0.25, -150); // Plus loin en arrière
-    transitionSegment2.receiveShadow = true;
-    scene.add(transitionSegment2);
-    roadSegments.push(transitionSegment2);
-}
-
-// Update road segments to avoid gaps
-function updateRoadSegments() {
-    if (gamePaused) return;
-    
-    // Vitesse de déplacement commune
-    const moveSpeed = 0.2;
-    
-    // Calculer la longueur totale de tous les segments de route
-    const totalRoadLength = roadSegments[0].userData.segmentLength * roadSegments.length;
-    
-    // Déplacer tous les segments de route ensemble
-    for (let i = 0; i < roadSegments.length; i++) {
-        const segment = roadSegments[i];
-        
-        // Avancer le segment
-        segment.position.z += moveSpeed;
-        
-        // Si le segment est trop avancé, le replacer exactement à l'arrière
-        if (segment.position.z > 50) {
-            segment.position.z -= totalRoadLength;
-        }
-    }
-}
 
 // Fonction pour créer un curseur de souris
 function createMouseCursor() {
@@ -1036,6 +922,8 @@ function createTroopMesh(level, position) {
         // Stocker les particules pour l'animation
         troopGroup.particles = particles;
     }
+    
+    troopGroup.rotation.y = Math.PI; // Rotation de 180 degrés pour qu'ils regardent dans la bonne direction
     
     // Set position
     troopGroup.position.set(position.x, 0, position.z);
