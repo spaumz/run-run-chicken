@@ -640,31 +640,41 @@ function createRealisticBridgeRailings(xPos, zPos) {
 
 // Create road segments for scrolling effect
 function createRoadSegments() {
-    // Augmenter le nombre de segments pour éviter les trous
+    // Augmenter le nombre de segments et assurer un bon chevauchement
     const segmentLength = 25;
-    const numSegments = 16; // Augmenté de 12 à 16 pour plus de couverture
-    const segmentOverlap = 1.0; // Augmenté de 0.5 à 1.0 pour plus de chevauchement
+    const numSegments = 20; // Augmenté pour plus de couverture
+    const segmentOverlap = 0.5; // Chevauchement modéré
     
     // Texture de route
     const roadTexture = createRoadTexture();
     const roadMaterial = new THREE.MeshPhongMaterial({
         map: roadTexture,
-        color: 0x333333, // Gris plus foncé pour la route
+        color: 0xffffff, // Couleur blanche pour ne pas altérer la texture
         shininess: 20
     });
     
-    // Créer les segments avec léger chevauchement - PLUS LARGES
+    // Créer un groupe pour contenir tous les segments de route
+    const roadGroup = new THREE.Group();
+    scene.add(roadGroup);
+    
+    // Créer les segments avec chevauchement
     for (let i = 0; i < numSegments; i++) {
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(30, 0.5, segmentLength + segmentOverlap), // Élargi à 30 au lieu de 26
+            new THREE.BoxGeometry(30, 0.5, segmentLength + segmentOverlap),
             roadMaterial
         );
         
-        segment.position.set(0, -0.25, -60 + (i - numSegments/2) * (segmentLength - segmentOverlap));
+        // Placer chaque segment de manière à assurer la continuité
+        segment.position.set(0, -0.25, -60 + i * (segmentLength - segmentOverlap));
         segment.receiveShadow = true;
-        scene.add(segment);
+        
+        // Stocker la position z initiale pour référence
+        segment.userData = { initialZ: segment.position.z };
+        
+        roadGroup.add(segment);
         roadSegments.push(segment);
     }
+}
     
     // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
     const transitionSegment1 = new THREE.Mesh(
@@ -691,33 +701,29 @@ function updateRoadSegments() {
     // Vitesse de déplacement commune
     const moveSpeed = 0.2;
     
-    // Scroll road segments for endless runner effect
+    // Longueur totale de la route pour le cycle
+    const roadLength = roadSegments.length * (25 - 0.5); // segmentLength - overlap
+    
+    // Déplacer tous les segments de route
     for (let i = 0; i < roadSegments.length; i++) {
         const segment = roadSegments[i];
+        
+        // Avancer le segment
         segment.position.z += moveSpeed;
         
-        // Si segment a dépassé la caméra, le replacer à l'arrière
+        // Si le segment a trop avancé, le repositionner en maintenant la continuité
         if (segment.position.z > 40) {
-            // Identifier le segment le plus en arrière
-            let farthestZ = 100;
-            let farthestIndex = -1;
-            for (let j = 0; j < roadSegments.length; j++) {
-                if (roadSegments[j].position.z < farthestZ) {
-                    farthestZ = roadSegments[j].position.z;
-                    farthestIndex = j;
-                }
-            }
-            
-            // Placer le segment juste après le plus reculé avec un peu de chevauchement
-            const depth = segment.geometry.parameters.depth;
-            segment.position.z = farthestZ - depth + 1.0; // Chevauchement de 1.0 unité
+            // Calculer le décalage exact pour un repositionnement fluide
+            // Au lieu de replacer aléatoirement, on conserve l'ordre et l'espacement exact
+            segment.position.z -= roadLength;
         }
     }
     
-    // Animation fluide des éléments du pont
-    const bridgeLength = 200; // Longueur totale du trajet du pont
+    // Animation fluide des éléments du pont - Même méthode que pour les segments de route
+    // Trouver la longueur totale des éléments du pont
+    const bridgeLength = 200; // Même valeur utilisée dans le code original
     
-    // Faire avancer tous les éléments du pont
+    // Faire avancer tous les éléments du pont de manière coordonnée
     for (let i = 0; i < bridgeElements.length; i++) {
         const element = bridgeElements[i];
         
@@ -729,8 +735,7 @@ function updateRoadSegments() {
         
         // Si l'élément a dépassé la caméra, le repositionner de manière fluide
         if (element.position.z > 80) {
-            // Au lieu de le repositionner brutalement, calculer le décalage exact
-            // pour qu'il se retrouve exactement une longueur bridgeLength en arrière
+            // Calculer le décalage exact pour le ramener en arrière
             const offset = Math.ceil((element.position.z - initialZ) / bridgeLength) * bridgeLength;
             element.position.z -= offset;
         }
@@ -744,14 +749,14 @@ function createRoadTexture() {
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     
-    // Road background
-    ctx.fillStyle = "#333333"; // Gris foncé
+    // Road background - Nouvelle couleur demandée
+    ctx.fillStyle = "#AEADB2"; // Couleur de route demandée
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Lane markings (3 lanes) avec marquages plus longs
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 8; // Ligne plus épaisse (était 5)
-    ctx.setLineDash([40, 20]); // Marquages plus longs (était [20, 20])
+    // Lane markings (3 lanes) avec marquages plus longs et nouvelle couleur
+    ctx.strokeStyle = "#DCE7DF"; // Nouvelle couleur pour les marquages
+    ctx.lineWidth = 8; // Ligne plus épaisse
+    ctx.setLineDash([40, 20]); // Marquages plus longs
     
     // Left lane divider
     ctx.beginPath();
