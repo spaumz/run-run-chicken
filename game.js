@@ -19,6 +19,8 @@ let mouseCursor;
 let roadSegments = [];
 let waterLeft, waterRight;
 let effectsToUpdate = [];
+let flashEffect; // Pour l'effet de flash
+let screenBorderEffect; // Pour le contour rouge
 
 // Max troop visualization
 const MAX_TROOPS_DISPLAYED = 30;
@@ -92,23 +94,28 @@ function init() {
     // Create road segments (instead of a single bridge)
     createRoadSegments();
     
-    // Create rails - Route élargie
+    // Create rails - Route élargie et bordure rougeâtre/marron
+    const railMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Couleur marron (SaddleBrown)
+    
     const leftRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 100),
-        new THREE.MeshPhongMaterial({ color: 0xcc3333 })
+        new THREE.BoxGeometry(0.5, 1.5, 150), // Allongé à 150 au lieu de 100
+        railMaterial
     );
-    leftRail.position.set(-12, 0.75, -20); // Position ajustée pour une route plus large
+    leftRail.position.set(-13, 0.75, -40); // Position ajustée pour route plus large et plus longue
     scene.add(leftRail);
     
     const rightRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 100),
-        new THREE.MeshPhongMaterial({ color: 0xcc3333 })
+        new THREE.BoxGeometry(0.5, 1.5, 150), // Allongé à 150 au lieu de 100
+        railMaterial
     );
-    rightRail.position.set(12, 0.75, -20); // Position ajustée pour une route plus large
+    rightRail.position.set(13, 0.75, -40); // Position ajustée pour route plus large et plus longue
     scene.add(rightRail);
     
     // Create mouse cursor
     createMouseCursor();
+    
+    // Create screen effects for bonus/malus
+    createScreenEffects();
     
     // Handle window resize
     window.addEventListener("resize", onWindowResize);
@@ -125,7 +132,7 @@ function init() {
 
 // Create water surfaces
 function createWaterSurfaces() {
-    const waterGeometry = new THREE.PlaneGeometry(100, 100);
+    const waterGeometry = new THREE.PlaneGeometry(150, 150); // Agrandi à 150x150 au lieu de 100x100
     const waterMaterial = new THREE.MeshPhongMaterial({
         color: 0x0099ff,
         transparent: true,
@@ -137,21 +144,21 @@ function createWaterSurfaces() {
     // Left water
     waterLeft = new THREE.Mesh(waterGeometry, waterMaterial);
     waterLeft.rotation.x = -Math.PI / 2;
-    waterLeft.position.set(-60, -1, 0);
+    waterLeft.position.set(-80, -1, -20); // Position reculée (-20 en z)
     scene.add(waterLeft);
     
     // Right water
     waterRight = new THREE.Mesh(waterGeometry, waterMaterial);
     waterRight.rotation.x = -Math.PI / 2;
-    waterRight.position.set(60, -1, 0);
+    waterRight.position.set(80, -1, -20); // Position reculée (-20 en z)
     scene.add(waterRight);
 }
 
 // Create road segments for scrolling effect
 function createRoadSegments() {
     // Create multiple road segments for scrolling
-    const segmentLength = 20;
-    const numSegments = 6;
+    const segmentLength = 25; // Plus long (était 20)
+    const numSegments = 8; // Plus de segments (était 6)
     
     for (let i = 0; i < numSegments; i++) {
         // Create road segment
@@ -162,11 +169,11 @@ function createRoadSegments() {
         });
         
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(24, 0.5, segmentLength), // Route élargie (24 au lieu de 20)
+            new THREE.BoxGeometry(26, 0.5, segmentLength), // Route élargie (26 au lieu de 24)
             roadMaterial
         );
         
-        segment.position.set(0, -0.25, -20 + (i - numSegments/2) * segmentLength);
+        segment.position.set(0, -0.25, -40 + (i - numSegments/2) * segmentLength); // Reculée à -40
         scene.add(segment);
         roadSegments.push(segment);
     }
@@ -238,7 +245,96 @@ function createMouseCursor() {
     scene.add(mouseCursor);
 }
 
-// Create a chicken based on level
+// Create screen effects for bonus/malus
+function createScreenEffects() {
+    // White flash effect for bonuses
+    const flashGeometry = new THREE.PlaneGeometry(100, 100);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: false
+    });
+    flashEffect = new THREE.Mesh(flashGeometry, flashMaterial);
+    flashEffect.position.set(0, 0, -10);
+    flashEffect.renderOrder = 999; // Render on top of everything
+    scene.add(flashEffect);
+    
+    // Red border effect for maluses
+    const borderGeometry = new THREE.RingGeometry(30, 35, 32);
+    const borderMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: false
+    });
+    screenBorderEffect = new THREE.Mesh(borderGeometry, borderMaterial);
+    screenBorderEffect.position.set(0, 0, -10);
+    screenBorderEffect.renderOrder = 999; // Render on top of everything
+    scene.add(screenBorderEffect);
+}
+
+// Show white flash effect
+function showFlashEffect() {
+    // Reset opacity
+    flashEffect.material.opacity = 0.7;
+    
+    // Create animation
+    const flashAnimation = {
+        life: 20, // Frames to live
+        update: function() {
+            // Fade out
+            flashEffect.material.opacity *= 0.9;
+            
+            // Decrease life
+            this.life--;
+            
+            // Remove when done
+            if (this.life <= 0) {
+                flashEffect.material.opacity = 0;
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    // Add to array of effects to update
+    effectsToUpdate.push(flashAnimation);
+}
+
+// Show red border effect
+function showBorderEffect() {
+    // Reset opacity
+    screenBorderEffect.material.opacity = 0.7;
+    
+    // Create animation
+    const borderAnimation = {
+        life: 30, // Frames to live
+        update: function() {
+            // Fade out
+            screenBorderEffect.material.opacity *= 0.95;
+            
+            // Decrease life
+            this.life--;
+            
+            // Remove when done
+            if (this.life <= 0) {
+                screenBorderEffect.material.opacity = 0;
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    // Add to array of effects to update
+    effectsToUpdate.push(borderAnimation);
+}
+
+// Create a chicken based on level with more realistic model
 function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const troopGroup = new THREE.Group();
     
@@ -248,96 +344,386 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     // Size increases with level
     const sizeMultiplier = 1 + (level * 0.25);
     
-    // Chicken body (egg shape)
-    const body = new THREE.Mesh(
-        new THREE.SphereGeometry(0.4 * sizeMultiplier, 16, 16),
-        new THREE.MeshPhongMaterial({ 
-            color: troopColors[level],
-            shininess: 70
-        })
-    );
-    body.scale.set(0.8, 1, 0.9);
-    body.position.y = 0.4 * sizeMultiplier;
+    // CORPS DU POULET AMÉLIORÉ
+    
+    // Corps principal (plus ovale et réaliste)
+    const bodyGeometry = new THREE.SphereGeometry(0.4 * sizeMultiplier, 24, 24);
+    const bodyMaterial = new THREE.MeshPhongMaterial({ 
+        color: troopColors[level],
+        shininess: 30
+    });
+    
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.scale.set(0.9, 1.2, 1.1); // Plus allongé verticalement
+    body.position.y = 0.5 * sizeMultiplier;
     troopGroup.add(body);
     
-    // Chicken head
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.25 * sizeMultiplier, 16, 16),
-        new THREE.MeshPhongMaterial({ color: troopColors[level] })
-    );
-    head.position.set(0, 0.8 * sizeMultiplier, 0.3 * sizeMultiplier);
-    troopGroup.add(head);
+    // Ajout d'un torse/poitrine plus bombé
+    const chestGeometry = new THREE.SphereGeometry(0.35 * sizeMultiplier, 24, 24);
+    const chest = new THREE.Mesh(chestGeometry, bodyMaterial);
+    chest.scale.set(1.1, 1, 0.9);
+    chest.position.set(0, 0.6 * sizeMultiplier, 0.15 * sizeMultiplier);
+    troopGroup.add(chest);
     
-    // Beak
-    const beak = new THREE.Mesh(
-        new THREE.ConeGeometry(0.1 * sizeMultiplier, 0.3 * sizeMultiplier, 8),
-        new THREE.MeshPhongMaterial({ color: 0xffaa00 })
-    );
-    beak.rotation.x = Math.PI / 2;
-    beak.position.set(0, 0.8 * sizeMultiplier, 0.5 * sizeMultiplier);
-    troopGroup.add(beak);
+    // Ajout de plumes détaillées sur le corps
+    const feathersCount = 40 + level * 10;
+    for (let i = 0; i < feathersCount; i++) {
+        const featherGeometry = new THREE.PlaneGeometry(
+            0.1 * sizeMultiplier * (0.7 + Math.random() * 0.6),
+            0.2 * sizeMultiplier * (0.7 + Math.random() * 0.6)
+        );
+        
+        // Couleur légèrement variée
+        const hue = (troopColors[level] & 0xFF0000) >> 16;
+        const saturation = (troopColors[level] & 0x00FF00) >> 8;
+        const lightness = troopColors[level] & 0x0000FF;
+        
+        const featherColor = new THREE.Color(
+            hue / 255 * (0.9 + Math.random() * 0.2),
+            saturation / 255 * (0.9 + Math.random() * 0.2),
+            lightness / 255 * (0.9 + Math.random() * 0.2)
+        );
+        
+        const featherMaterial = new THREE.MeshPhongMaterial({
+            color: featherColor,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.9
+        });
+        
+        const feather = new THREE.Mesh(featherGeometry, featherMaterial);
+        
+        // Position aléatoire sur le corps
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.random() * Math.PI - Math.PI/2;
+        const radius = 0.4 * sizeMultiplier;
+        
+        const x = radius * Math.sin(phi) * Math.cos(theta);
+        const y = 0.5 * sizeMultiplier + radius * Math.cos(phi);
+        const z = radius * Math.sin(phi) * Math.sin(theta);
+        
+        feather.position.set(x, y, z);
+        
+        // Orientation de la plume
+        feather.lookAt(0, y, 0);
+        feather.rotateX(Math.random() * Math.PI * 0.25);
+        
+        troopGroup.add(feather);
+    }
     
-    // Eyes
-    const eyeGeometry = new THREE.SphereGeometry(0.05 * sizeMultiplier, 8, 8);
-    const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-    
-    const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    leftEye.position.set(-0.12 * sizeMultiplier, 0.85 * sizeMultiplier, 0.4 * sizeMultiplier);
-    troopGroup.add(leftEye);
-    
-    const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
-    rightEye.position.set(0.12 * sizeMultiplier, 0.85 * sizeMultiplier, 0.4 * sizeMultiplier);
-    troopGroup.add(rightEye);
-    
-    // Wings
-    const wingGeometry = new THREE.BoxGeometry(0.4 * sizeMultiplier, 0.1 * sizeMultiplier, 0.3 * sizeMultiplier);
-    wingGeometry.translate(0, 0, 0.15 * sizeMultiplier);
-    const wingMaterial = new THREE.MeshPhongMaterial({ 
+    // Tête plus détaillée
+    const headGeometry = new THREE.SphereGeometry(0.28 * sizeMultiplier, 24, 24);
+    const headMaterial = new THREE.MeshPhongMaterial({ 
         color: troopColors[level],
         shininess: 40
     });
     
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.set(0, 0.9 * sizeMultiplier, 0.3 * sizeMultiplier);
+    troopGroup.add(head);
+    
+    // Crête plus réaliste
+    const combGeometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const combHeight = 0.3 * sizeMultiplier;
+    const combWidth = 0.15 * sizeMultiplier;
+    const segments = 5; // Nombre de "dents" de la crête
+    
+    for (let i = 0; i < segments; i++) {
+        const x = (i / (segments - 1) - 0.5) * combWidth;
+        vertices.push(
+            x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier, // Base
+            x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier, // Sommet
+            x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier // Base suivante
+        );
+        
+        if (i < segments - 1) {
+            vertices.push(
+                x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier, // Base suivante
+                x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier, // Sommet actuel
+                x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i+1)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier // Sommet suivant
+            );
+        }
+    }
+    
+    combGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    combGeometry.computeVertexNormals();
+    
+    const combMaterial = new THREE.MeshPhongMaterial({
+        color: 0xff3333,
+        side: THREE.DoubleSide,
+        shininess: 80
+    });
+    
+    const comb = new THREE.Mesh(combGeometry, combMaterial);
+    troopGroup.add(comb);
+    
+    // Barbillon (wattle) sous le bec
+    const wattleGeometry = new THREE.SphereGeometry(0.15 * sizeMultiplier, 16, 16);
+    const wattleMaterial = new THREE.MeshPhongMaterial({
+        color: 0xff3333,
+        shininess: 70
+    });
+    
+    const wattle = new THREE.Mesh(wattleGeometry, wattleMaterial);
+    wattle.scale.set(0.6, 1, 0.5);
+    wattle.position.set(0, 0.7 * sizeMultiplier, 0.5 * sizeMultiplier);
+    troopGroup.add(wattle);
+    
+    // Bec plus réaliste
+    const beakUpperGeometry = new THREE.ConeGeometry(0.1 * sizeMultiplier, 0.25 * sizeMultiplier, 16);
+    const beakLowerGeometry = new THREE.ConeGeometry(0.09 * sizeMultiplier, 0.2 * sizeMultiplier, 16);
+    const beakMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xffb700,
+        shininess: 60
+    });
+    
+    const beakUpper = new THREE.Mesh(beakUpperGeometry, beakMaterial);
+    beakUpper.rotation.x = Math.PI / 2;
+    beakUpper.position.set(0, 0.85 * sizeMultiplier, 0.55 * sizeMultiplier);
+    beakUpper.scale.set(1, 1, 0.5); // Aplatir le bec
+    troopGroup.add(beakUpper);
+    
+    const beakLower = new THREE.Mesh(beakLowerGeometry, beakMaterial);
+    beakLower.rotation.x = Math.PI / 2;
+    beakLower.position.set(0, 0.75 * sizeMultiplier, 0.55 * sizeMultiplier);
+    beakLower.scale.set(1, 1, 0.4); // Aplatir le bec inférieur
+    troopGroup.add(beakLower);
+    
+    // Yeux plus réalistes
+    const eyeGeometry = new THREE.SphereGeometry(0.06 * sizeMultiplier, 16, 16);
+    const eyeWhiteMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const eyePupilMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const eyeHighlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    
+    // Left eye
+    const leftEyeWhite = new THREE.Mesh(eyeGeometry, eyeWhiteMaterial);
+    leftEyeWhite.position.set(-0.15 * sizeMultiplier, 0.9 * sizeMultiplier, 0.42 * sizeMultiplier);
+    troopGroup.add(leftEyeWhite);
+    
+    const leftEyePupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03 * sizeMultiplier, 12, 12),
+        eyePupilMaterial
+    );
+    leftEyePupil.position.set(-0.15 * sizeMultiplier, 0.9 * sizeMultiplier, 0.47 * sizeMultiplier);
+    troopGroup.add(leftEyePupil);
+    
+    const leftEyeHighlight = new THREE.Mesh(
+        new THREE.SphereGeometry(0.01 * sizeMultiplier, 8, 8),
+        eyeHighlightMaterial
+    );
+    leftEyeHighlight.position.set(-0.145 * sizeMultiplier, 0.91 * sizeMultiplier, 0.49 * sizeMultiplier);
+    troopGroup.add(leftEyeHighlight);
+    
+    // Right eye
+    const rightEyeWhite = new THREE.Mesh(eyeGeometry, eyeWhiteMaterial);
+    rightEyeWhite.position.set(0.15 * sizeMultiplier, 0.9 * sizeMultiplier, 0.42 * sizeMultiplier);
+    troopGroup.add(rightEyeWhite);
+    
+    const rightEyePupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03 * sizeMultiplier, 12, 12),
+        eyePupilMaterial
+    );
+    rightEyePupil.position.set(0.15 * sizeMultiplier, 0.9 * sizeMultiplier, 0.47 * sizeMultiplier);
+    troopGroup.add(rightEyePupil);
+    
+    const rightEyeHighlight = new THREE.Mesh(
+        new THREE.SphereGeometry(0.01 * sizeMultiplier, 8, 8),
+        eyeHighlightMaterial
+    );
+    rightEyeHighlight.position.set(0.145 * sizeMultiplier, 0.91 * sizeMultiplier, 0.49 * sizeMultiplier);
+    troopGroup.add(rightEyeHighlight);
+    
+    // Ailes plus détaillées
+    const wingGeometry = new THREE.BufferGeometry();
+    const wingVertices = [];
+    const wingWidth = 0.5 * sizeMultiplier;
+    const wingLength = 0.6 * sizeMultiplier;
+    const wingSegments = 7;
+    
+    for (let i = 0; i < wingSegments; i++) {
+        const y1 = 0.3 * sizeMultiplier + (i / wingSegments) * 0.5 * sizeMultiplier;
+        const y2 = 0.3 * sizeMultiplier + ((i + 1) / wingSegments) * 0.5 * sizeMultiplier;
+        const width1 = wingWidth * (1 - i / wingSegments * 0.5);
+        const width2 = wingWidth * (1 - (i + 1) / wingSegments * 0.5);
+        const z1 = 0.1 * sizeMultiplier * Math.sin(i / wingSegments * Math.PI);
+        const z2 = 0.1 * sizeMultiplier * Math.sin((i + 1) / wingSegments * Math.PI);
+        
+        // Triangle 1
+        wingVertices.push(
+            0, y1, 0,
+            width1, y1, z1,
+            0, y2, 0
+        );
+        
+        // Triangle 2
+        wingVertices.push(
+            0, y2, 0,
+            width1, y1, z1,
+            width2, y2, z2
+        );
+    }
+    
+    wingGeometry.setAttribute('position', new THREE.Float32BufferAttribute(wingVertices, 3));
+    wingGeometry.computeVertexNormals();
+    
+    const wingMaterial = new THREE.MeshPhongMaterial({
+        color: troopColors[level],
+        side: THREE.DoubleSide,
+        shininess: 30
+    });
+    
+    // Left wing
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
     leftWing.position.set(-0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    leftWing.rotation.y = -Math.PI / 6;
+    leftWing.rotation.z = -0.2; // Angle initial
     troopGroup.add(leftWing);
     
+    // Right wing (mirrored)
     const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
     rightWing.position.set(0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    rightWing.rotation.y = Math.PI / 6;
+    rightWing.rotation.z = 0.2; // Angle initial
+    rightWing.rotation.y = Math.PI; // Mirror
     troopGroup.add(rightWing);
     
-    // Legs
-    const legGeometry = new THREE.CylinderGeometry(0.03 * sizeMultiplier, 0.03 * sizeMultiplier, 0.3 * sizeMultiplier);
-    const legMaterial = new THREE.MeshPhongMaterial({ color: 0xffaa00 });
+    // Pattes plus réalistes
+    const legMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xffaa00,
+        shininess: 30
+    });
     
-    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
-    leftLeg.position.set(-0.15 * sizeMultiplier, 0.15 * sizeMultiplier, 0);
-    troopGroup.add(leftLeg);
-    
-    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
-    rightLeg.position.set(0.15 * sizeMultiplier, 0.15 * sizeMultiplier, 0);
-    troopGroup.add(rightLeg);
-    
-    // Comb for higher levels
-    if (level > 0) {
-        const comb = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1 * sizeMultiplier, 0.2 * sizeMultiplier, 0.1 * sizeMultiplier),
-            new THREE.MeshPhongMaterial({ color: 0xff0000 })
+    function createLeg(xPos) {
+        // Cuisse
+        const thighGeometry = new THREE.CylinderGeometry(
+            0.05 * sizeMultiplier, 
+            0.04 * sizeMultiplier, 
+            0.2 * sizeMultiplier
         );
-        comb.position.set(0, 1 * sizeMultiplier, 0.2 * sizeMultiplier);
-        troopGroup.add(comb);
+        const thigh = new THREE.Mesh(thighGeometry, legMaterial);
+        thigh.position.set(xPos, 0.3 * sizeMultiplier, 0);
+        thigh.rotation.z = 0.3; // Légère inclinaison
+        troopGroup.add(thigh);
+        
+        // Partie inférieure de la patte
+        const shinGeometry = new THREE.CylinderGeometry(
+            0.03 * sizeMultiplier, 
+            0.02 * sizeMultiplier, 
+            0.25 * sizeMultiplier
+        );
+        const shin = new THREE.Mesh(shinGeometry, legMaterial);
+        shin.position.set(xPos, 0.13 * sizeMultiplier, 0);
+        troopGroup.add(shin);
+        
+        // Pied
+        const footGeometry = new THREE.BoxGeometry(
+            0.12 * sizeMultiplier, 
+            0.02 * sizeMultiplier, 
+            0.15 * sizeMultiplier
+        );
+        const foot = new THREE.Mesh(footGeometry, legMaterial);
+        foot.position.set(xPos, 0 * sizeMultiplier, 0.05 * sizeMultiplier);
+        troopGroup.add(foot);
+        
+        // Orteils
+        for (let i = 0; i < 3; i++) {
+            const toeGeometry = new THREE.CylinderGeometry(
+                0.015 * sizeMultiplier,
+                0.01 * sizeMultiplier,
+                0.08 * sizeMultiplier
+            );
+            const toe = new THREE.Mesh(toeGeometry, legMaterial);
+            toe.rotation.x = Math.PI / 2;
+            toe.position.set(
+                xPos + (i - 1) * 0.04 * sizeMultiplier,
+                0,
+                0.13 * sizeMultiplier
+            );
+            troopGroup.add(toe);
+        }
+    }
+    
+    // Créer les deux pattes
+    createLeg(-0.15 * sizeMultiplier);
+    createLeg(0.15 * sizeMultiplier);
+    
+    // Queue
+    const tailGeometry = new THREE.SphereGeometry(0.2 * sizeMultiplier, 16, 16);
+    const tail = new THREE.Mesh(tailGeometry, new THREE.MeshPhongMaterial({
+        color: troopColors[level],
+        shininess: 30
+    }));
+    tail.position.set(0, 0.7 * sizeMultiplier, -0.4 * sizeMultiplier);
+    tail.scale.set(1, 1.2, 0.8);
+    troopGroup.add(tail);
+    
+    // Plumes de queue
+    for (let i = 0; i < 7; i++) {
+        const tailFeatherGeometry = new THREE.PlaneGeometry(
+            0.15 * sizeMultiplier,
+            0.4 * sizeMultiplier
+        );
+        const tailFeather = new THREE.Mesh(tailFeatherGeometry, new THREE.MeshPhongMaterial({
+            color: troopColors[level],
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.9
+        }));
+        
+        const angle = (i - 3) * 0.2;
+        tailFeather.position.set(
+            0.1 * sizeMultiplier * Math.sin(angle),
+            0.7 * sizeMultiplier,
+            -0.5 * sizeMultiplier - 0.1 * Math.cos(angle)
+        );
+        tailFeather.rotation.y = angle;
+        tailFeather.rotation.x = -0.3;
+        troopGroup.add(tailFeather);
     }
     
     // Special accessories for higher levels
     if (level >= 3) {
         // Add a crown for level 3+
-        const crown = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2 * sizeMultiplier, 0.25 * sizeMultiplier, 0.1 * sizeMultiplier, 8),
-            new THREE.MeshPhongMaterial({ color: 0xffdd00, shininess: 100 })
+        const crownGeometry = new THREE.CylinderGeometry(
+            0.2 * sizeMultiplier, 
+            0.25 * sizeMultiplier, 
+            0.15 * sizeMultiplier, 
+            16, 
+            1, 
+            true
         );
-        crown.position.set(0, 1.1 * sizeMultiplier, 0.2 * sizeMultiplier);
+        const crownMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0xffdd00, 
+            shininess: 100 
+        });
+        const crown = new THREE.Mesh(crownGeometry, crownMaterial);
+        crown.position.set(0, 1.2 * sizeMultiplier, 0.2 * sizeMultiplier);
         troopGroup.add(crown);
+        
+        // Ajout de pointes à la couronne
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            const spike = new THREE.Mesh(
+                new THREE.ConeGeometry(0.03 * sizeMultiplier, 0.1 * sizeMultiplier, 8),
+                crownMaterial
+            );
+            spike.position.set(
+                Math.cos(angle) * 0.2 * sizeMultiplier,
+                1.3 * sizeMultiplier,
+                Math.sin(angle) * 0.2 * sizeMultiplier + 0.2 * sizeMultiplier
+            );
+            troopGroup.add(spike);
+        }
+        
+        // Ajout d'un médaillon/gemme sur la couronne
+        const gemGeometry = new THREE.SphereGeometry(0.06 * sizeMultiplier, 16, 16);
+        const gemMaterial = new THREE.MeshPhongMaterial({
+            color: 0x00ffff,
+            shininess: 100,
+            specular: 0xffffff
+        });
+        const gem = new THREE.Mesh(gemGeometry, gemMaterial);
+        gem.position.set(0, 1.2 * sizeMultiplier, 0.4 * sizeMultiplier);
+        troopGroup.add(gem);
     }
     
     // Ajout d'un effet de particules pour les poulets évolués
@@ -382,7 +768,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     return troopGroup;
 }
 
-// Update troops visualization
+// Update troops visualization with better spacing
 function updateTroops() {
     // Remove all existing troops
     for (let i = 0; i < troopMeshes.length; i++) {
@@ -438,9 +824,11 @@ function updateTroops() {
         }
     }
     
-    // Create troops of each level in formation
+    // Create troops of each level in formation with better spacing
     let xPos = -6;
-    let zPos = -2; // Reculé par rapport à l'original
+    let zPos = -4; // Reculé davantage (était -2)
+    const xSpacing = 2.0; // Plus d'espace entre les poulets (était 1.5)
+    const zSpacing = 2.0; // Plus d'espace entre les rangées (était 1.5)
     
     // Create highest level troops first (bigger ones in back)
     for (let level = 9; level >= 0; level--) {
@@ -452,18 +840,18 @@ function updateTroops() {
             // Set the first troop as player
             if (!player) player = troop;
             
-            // Update position for next troop
-            xPos += 1.5;
+            // Update position for next troop with better spacing
+            xPos += xSpacing;
             if (xPos > 6) {
                 xPos = -6;
-                zPos -= 1.5;
+                zPos -= zSpacing;
             }
         }
     }
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -2 }); // Reculé
+        const troop = createTroopMesh(0, { x: 0, z: -4 }); // Reculé
         troopMeshes.push(troop);
         player = troop;
     }
@@ -852,19 +1240,19 @@ function animate(time) {
             player.position.x += (targetPlayerX - player.position.x) * 0.05;
             
             // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-11, Math.min(11, player.position.x)); // Limites plus larges
+            player.position.x = Math.max(-12, Math.min(12, player.position.x)); // Limites plus larges
             
-            // Move all troops to follow the leader in formation
+            // Move all troops to follow the leader in formation with better spacing
             for (let i = 1; i < troopMeshes.length; i++) {
                 const troop = troopMeshes[i];
                 
-                // Calculate positions in a grid pattern
-                const row = Math.floor(i / 5);
-                const col = i % 5;
+                // Calculate positions in a grid pattern with more space
+                const row = Math.floor(i / 4); // 4 poulets par rangée au lieu de 5
+                const col = i % 4;
                 
-                // Position offset from leader
-                const offsetX = (col - 2) * 1.5;
-                const offsetZ = -row * 1.5;
+                // Position offset from leader with more space
+                const offsetX = (col - 1.5) * 2.0; // Plus d'espace (2.0 au lieu de 1.5)
+                const offsetZ = -row * 2.0; // Plus d'espace (2.0 au lieu de 1.5)
                 
                 // Target position
                 const targetX = player.position.x + offsetX;
@@ -943,9 +1331,10 @@ function animate(time) {
                 multiplier.particles.rotation.z += 0.005;
             }
             
-            // Check for collision with player
-            if (player && multiplier.mesh.position.z > -1 && multiplier.mesh.position.z < 1 &&
-                Math.abs(multiplier.mesh.position.x - player.position.x) < 2) {
+            // Check for collision with player - ZONE DE COLLISION AGRANDIE
+            if (player && 
+                multiplier.mesh.position.z > -2 && multiplier.mesh.position.z < 2 &&
+                Math.abs(multiplier.mesh.position.x - player.position.x) < 3) { // Agrandie de 2 à 3
                 
                 // Apply multiplier effect
                 const oldTroops = troops;
@@ -961,6 +1350,13 @@ function animate(time) {
                 
                 // Add visual effect for entering portal
                 createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
+                
+                // Afficher l'effet de flash ou de bordure selon le type de multiplier
+                if (multiplier.positive) {
+                    showFlashEffect(); // Flash blanc pour bonus
+                } else {
+                    showBorderEffect(); // Bordure rouge pour malus
+                }
                 
                 // Remove multiplier
                 scene.remove(multiplier.mesh);
@@ -989,7 +1385,7 @@ function animate(time) {
             
             // If segment has moved past the camera, move it to the back
             if (segment.position.z > 30) {
-                segment.position.z -= roadSegments.length * 20;
+                segment.position.z -= roadSegments.length * 25; // Ajusté pour segments plus longs (25)
             }
         }
         
