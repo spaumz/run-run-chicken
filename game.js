@@ -639,6 +639,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
 }
 
 // Create road segments for scrolling effect
+// Create road segments for scrolling effect
 function createRoadSegments() {
     // Augmenter le nombre de segments et assurer un bon chevauchement
     const segmentLength = 25;
@@ -674,26 +675,6 @@ function createRoadSegments() {
         roadGroup.add(segment);
         roadSegments.push(segment);
     }
-    
-    // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
-    const transitionSegment1 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment1.position.set(0, -0.25, 25); // Légèrement plus loin
-    transitionSegment1.receiveShadow = true;
-    scene.add(transitionSegment1);
-    roadSegments.push(transitionSegment1);
-    
-    const transitionSegment2 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment2.position.set(0, -0.25, -150); // Plus loin en arrière
-    transitionSegment2.receiveShadow = true;
-    scene.add(transitionSegment2);
-    roadSegments.push(transitionSegment2);
-}
     
     // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
     const transitionSegment1 = new THREE.Mesh(
