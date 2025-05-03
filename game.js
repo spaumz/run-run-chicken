@@ -21,6 +21,7 @@ let waterLeft, waterRight;
 let effectsToUpdate = [];
 let flashEffect; // Pour l'effet de flash
 let screenBorderEffect; // Pour le contour rouge
+let bridgeElements = []; // Tableau pour stocker tous les éléments de pont
 
 // Max troop visualization
 const MAX_TROOPS_DISPLAYED = 30;
@@ -121,8 +122,8 @@ function init() {
     });
     
     // Création de rambardes de pont réalistes sur les côtés
-    createRealisticBridgeRailings(-13, -40);
-    createRealisticBridgeRailings(13, -40);
+    createRealisticBridgeRailings(-15, -40); // Élargi à -15 au lieu de -13
+    createRealisticBridgeRailings(15, -40);  // Élargi à 15 au lieu de 13
     
     // Create mouse cursor
     createMouseCursor();
@@ -277,6 +278,11 @@ function createBridgePylons() {
     
     const pylon3 = createPylon(20);
     scene.add(pylon3);
+    
+    // Ajouter les pylônes au tableau des éléments du pont
+    bridgeElements.push(pylon1);
+    bridgeElements.push(pylon2);
+    bridgeElements.push(pylon3);
 }
 
 // Fonction pour créer des nuages
@@ -459,7 +465,7 @@ function createSuspensionCables() {
         cableMaterial
     );
     leftMainCable.rotation.z = Math.PI / 2;
-    leftMainCable.position.set(-13, 25, -50);
+    leftMainCable.position.set(-15, 25, -50); // Élargi à -15 au lieu de -13
     leftMainCable.castShadow = true;
     cablesGroup.add(leftMainCable);
     
@@ -468,7 +474,7 @@ function createSuspensionCables() {
         cableMaterial
     );
     rightMainCable.rotation.z = Math.PI / 2;
-    rightMainCable.position.set(13, 25, -50);
+    rightMainCable.position.set(15, 25, -50); // Élargi à 15 au lieu de 13
     rightMainCable.castShadow = true;
     cablesGroup.add(rightMainCable);
     
@@ -479,7 +485,7 @@ function createSuspensionCables() {
             new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
             cableMaterial
         );
-        leftCable.position.set(-13, 12.5, z);
+        leftCable.position.set(-15, 12.5, z); // Élargi à -15 au lieu de -13
         leftCable.castShadow = true;
         cablesGroup.add(leftCable);
         
@@ -488,12 +494,15 @@ function createSuspensionCables() {
             new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
             cableMaterial
         );
-        rightCable.position.set(13, 12.5, z);
+        rightCable.position.set(15, 12.5, z); // Élargi à 15 au lieu de 13
         rightCable.castShadow = true;
         cablesGroup.add(rightCable);
     }
     
     scene.add(cablesGroup);
+    
+    // Ajouter le groupe de câbles au tableau des éléments du pont
+    bridgeElements.push(cablesGroup);
 }
 
 // Create water surfaces
@@ -600,6 +609,9 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Positionner le groupe complet à l'emplacement x demandé
     railingGroup.position.x = xPos;
     
+    // Ajouter à la liste des éléments du pont au lieu de roadSegments
+    bridgeElements.push(railingGroup);
+    
     // Ajouter le groupe à la scène
     scene.add(railingGroup);
     
@@ -621,10 +633,10 @@ function createRoadSegments() {
         shininess: 30
     });
     
-    // Créer les segments avec léger chevauchement
+    // Créer les segments avec léger chevauchement - PLUS LARGES
     for (let i = 0; i < numSegments; i++) {
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(26, 0.5, segmentLength + segmentOverlap),
+            new THREE.BoxGeometry(30, 0.5, segmentLength + segmentOverlap), // Élargi à 30 au lieu de 26
             roadMaterial
         );
         
@@ -634,9 +646,9 @@ function createRoadSegments() {
         roadSegments.push(segment);
     }
     
-    // Ajouter des segments de transition pour assurer la continuité
+    // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
     const transitionSegment1 = new THREE.Mesh(
-        new THREE.BoxGeometry(26, 0.5, 10),
+        new THREE.BoxGeometry(30, 0.5, 10), // Élargi à 30 au lieu de 26
         roadMaterial
     );
     transitionSegment1.position.set(0, -0.25, 20);
@@ -645,7 +657,7 @@ function createRoadSegments() {
     roadSegments.push(transitionSegment1);
     
     const transitionSegment2 = new THREE.Mesh(
-        new THREE.BoxGeometry(26, 0.5, 10),
+        new THREE.BoxGeometry(30, 0.5, 10), // Élargi à 30 au lieu de 26
         roadMaterial
     );
     transitionSegment2.position.set(0, -0.25, -140);
@@ -656,13 +668,15 @@ function createRoadSegments() {
 
 // Update road segments to avoid gaps
 function updateRoadSegments() {
+    // Vitesse de déplacement commune
+    const moveSpeed = 0.2;
+    
     // Scroll road segments for endless runner effect
     for (let i = 0; i < roadSegments.length; i++) {
         const segment = roadSegments[i];
-        segment.position.z += 0.2;
+        segment.position.z += moveSpeed;
         
         // Si segment a dépassé la caméra, le replacer à l'arrière
-        // Valeur augmentée pour éviter les trous
         if (segment.position.z > 40) {
             // Calculer la position la plus reculée parmi tous les segments
             let farthestZ = 100;
@@ -673,6 +687,17 @@ function updateRoadSegments() {
             }
             // Placer le segment juste après le plus reculé
             segment.position.z = farthestZ - segment.geometry.parameters.depth + 0.5;
+        }
+    }
+    
+    // Faire avancer tous les éléments du pont
+    for (let i = 0; i < bridgeElements.length; i++) {
+        const element = bridgeElements[i];
+        element.position.z += moveSpeed;
+        
+        // Si l'élément a dépassé la caméra, le replacer à l'arrière
+        if (element.position.z > 80) {
+            element.position.z -= 200; // Replacer loin derrière
         }
     }
 }
@@ -1225,9 +1250,9 @@ function updateTroops() {
     }
     
     // Create troops of each level in formation with better spacing
-    // Position reculée considérablement
+    // Position avancée (au lieu de reculée)
     let xPos = -6;
-    let zPos = -12; // Reculé davantage (était -8)
+    let zPos = -2; // Position avancée (était -12)
     const xSpacing = 2.5; 
     const zSpacing = 2.5; 
     
@@ -1252,7 +1277,7 @@ function updateTroops() {
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -12 }); // Reculé davantage
+        const troop = createTroopMesh(0, { x: 0, z: -2 }); // Position avancée (était -12)
         troopMeshes.push(troop);
         player = troop;
     }
