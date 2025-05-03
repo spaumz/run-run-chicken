@@ -2490,7 +2490,12 @@ function updateRoadSegments() {
             }
             
             // Si on trouve un élément similaire, placer cet élément derrière
-            if (farthestSameTypeIndex !== -1) {
-                // Estimer la "taille" de l'élément pour un placement continu
-                const estimatedDepth = 20; // Estimation de la profondeur d'un élément du pont
-                const newZ
+if (farthestSameTypeIndex !== -1) {
+    // Estimer la "taille" de l'élément pour un placement continu
+    const estimatedDepth = 20; // Estimation de la profondeur d'un élément du pont
+    const newZ = bridgeElements[farthestSameTypeIndex].position.z - estimatedDepth - 50;
+    element.position.z = newZ;
+} else {
+    // Sinon repositionner loin en arrière
+    element.position.z = -200;
+}
