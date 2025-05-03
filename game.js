@@ -75,18 +75,35 @@ function init() {
     camera.position.set(0, 18, 5); // Position plus proche de la route
     camera.lookAt(0, 0, -10);     // Point de focus plus proche
     
-    // Create renderer
+    // Create renderer with shadow support
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Soft shadows
     gameContainer.appendChild(renderer.domElement);
     
-    // Add lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Add ambient light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // Réduite pour accentuer les ombres
     scene.add(ambientLight);
     
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(10, 20, 0);
+    // Add directional light with shadows (soleil)
+    const directionalLight = new THREE.DirectionalLight(0xffffcc, 1.0); // Lumière plus forte et légèrement jaune
+    directionalLight.position.set(15, 30, 10);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 100;
+    directionalLight.shadow.camera.left = -30;
+    directionalLight.shadow.camera.right = 30;
+    directionalLight.shadow.camera.top = 30;
+    directionalLight.shadow.camera.bottom = -30;
     scene.add(directionalLight);
+    
+    // Add secondary light for fill (lumière d'ambiance, moins forte)
+    const fillLight = new THREE.DirectionalLight(0xccccff, 0.4); // Légèrement bleutée
+    fillLight.position.set(-10, 10, -10);
+    scene.add(fillLight);
     
     // Create water surfaces on both sides of the road
     createWaterSurfaces();
@@ -94,22 +111,15 @@ function init() {
     // Create road segments (instead of a single bridge)
     createRoadSegments();
     
-    // Create rails - Route élargie et bordure rougeâtre/marron
-    const railMaterial = new THREE.MeshPhongMaterial({ color: 0x8B4513 }); // Couleur marron (SaddleBrown)
+    // Create rails - Route élargie et bordure saumon/corail
+    const railMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xEB806C,  // Couleur saumon/corail demandée
+        shininess: 60
+    });
     
-    const leftRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 150), // Allongé à 150 au lieu de 100
-        railMaterial
-    );
-    leftRail.position.set(-13, 0.75, -40); // Position ajustée pour route plus large et plus longue
-    scene.add(leftRail);
-    
-    const rightRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 1.5, 150), // Allongé à 150 au lieu de 100
-        railMaterial
-    );
-    rightRail.position.set(13, 0.75, -40); // Position ajustée pour route plus large et plus longue
-    scene.add(rightRail);
+    // Création de rambardes de pont réalistes sur les côtés
+    createRealisticBridgeRailings(-13, -40);
+    createRealisticBridgeRailings(13, -40);
     
     // Create mouse cursor
     createMouseCursor();
@@ -145,13 +155,102 @@ function createWaterSurfaces() {
     waterLeft = new THREE.Mesh(waterGeometry, waterMaterial);
     waterLeft.rotation.x = -Math.PI / 2;
     waterLeft.position.set(-80, -1, -20); // Position reculée (-20 en z)
+    waterLeft.receiveShadow = true; // Reçoit les ombres des autres objets
     scene.add(waterLeft);
     
     // Right water
     waterRight = new THREE.Mesh(waterGeometry, waterMaterial);
     waterRight.rotation.x = -Math.PI / 2;
     waterRight.position.set(80, -1, -20); // Position reculée (-20 en z)
+    waterRight.receiveShadow = true; // Reçoit les ombres des autres objets
     scene.add(waterRight);
+}
+
+// Fonction pour créer les rambardes de pont réalistes (comme sur l'image)
+function createRealisticBridgeRailings(xPos, zPos) {
+    // Groupe pour les rambardes
+    const railingGroup = new THREE.Group();
+    
+    // Matériau pour les rambardes principales (rouge-saumon comme demandé)
+    const railingMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xEB806C,
+        shininess: 60
+    });
+    
+    // Matériau pour les câbles
+    const cableMaterial = new THREE.MeshPhongMaterial({
+        color: 0xDD7055,
+        shininess: 80
+    });
+    
+    // Longueur totale des rambardes
+    const railingLength = 150;
+    const segmentLength = 10; // Distance entre les supports verticaux
+    const numSegments = Math.floor(railingLength / segmentLength);
+    
+    // Base de la rambarde (barre horizontale du bas)
+    const baseRail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.5, railingLength),
+        railingMaterial
+    );
+    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 40);
+    baseRail.castShadow = true;
+    baseRail.receiveShadow = true;
+    railingGroup.add(baseRail);
+    
+    // Créer les supports verticaux et la barre du haut
+    for (let i = 0; i <= numSegments; i++) {
+        // Support vertical
+        const verticalPost = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 1.5, 0.5),
+            railingMaterial
+        );
+        
+        const postZ = zPos + i * segmentLength;
+        verticalPost.position.set(0, 1.5, postZ);
+        verticalPost.castShadow = true;
+        verticalPost.receiveShadow = true;
+        railingGroup.add(verticalPost);
+        
+        // Barres horizontales supplémentaires (rambarde supérieure)
+        if (i < numSegments) {
+            const topRail = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5, 0.5, segmentLength + 0.1),
+                railingMaterial
+            );
+            topRail.position.set(0, 2.25, postZ + segmentLength/2);
+            topRail.castShadow = true;
+            topRail.receiveShadow = true;
+            railingGroup.add(topRail);
+            
+            // Ajouter des câbles diagonaux entre les supports
+            const cable = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.05, 0.05, Math.sqrt(Math.pow(segmentLength, 2) + Math.pow(1.5, 2))),
+                cableMaterial
+            );
+            
+            // Positionner et orienter le câble diagonal
+            cable.position.set(0, 1.5, postZ + segmentLength/2);
+            
+            // Calculer l'angle pour orienter les câbles
+            const angle = Math.atan2(1.5, segmentLength);
+            cable.rotation.x = Math.PI/2 - angle;
+            
+            cable.castShadow = true;
+            railingGroup.add(cable);
+        }
+    }
+    
+    // Positionner le groupe complet à l'emplacement x demandé
+    railingGroup.position.x = xPos;
+    
+    // Ajouter à la liste des segments de route pour qu'ils avancent ensemble
+    roadSegments.push(railingGroup);
+    
+    // Ajouter le groupe à la scène
+    scene.add(railingGroup);
+    
+    return railingGroup;
 }
 
 // Create road segments for scrolling effect
@@ -174,6 +273,7 @@ function createRoadSegments() {
         );
         
         segment.position.set(0, -0.25, -40 + (i - numSegments/2) * segmentLength); // Reculée à -40
+        segment.receiveShadow = true; // Reçoit les ombres des autres objets
         scene.add(segment);
         roadSegments.push(segment);
     }
@@ -247,14 +347,15 @@ function createMouseCursor() {
 
 // Create screen effects for bonus/malus
 function createScreenEffects() {
-    // White flash effect for bonuses
+    // White flash effect for bonuses - Beaucoup plus spectaculaire
     const flashGeometry = new THREE.PlaneGeometry(100, 100);
     const flashMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
         transparent: true,
         opacity: 0,
         side: THREE.DoubleSide,
-        depthTest: false
+        depthTest: false,
+        blending: THREE.AdditiveBlending // Pour un effet plus lumineux
     });
     flashEffect = new THREE.Mesh(flashGeometry, flashMaterial);
     flashEffect.position.set(0, 0, -10);
@@ -276,23 +377,91 @@ function createScreenEffects() {
     scene.add(screenBorderEffect);
 }
 
-// Show white flash effect
+// Show white flash effect - Version améliorée et plus spectaculaire
 function showFlashEffect() {
     // Reset opacity
-    flashEffect.material.opacity = 0.7;
+    flashEffect.material.opacity = 0.9; // Plus lumineux
     
-    // Create animation
+    // Effet de vague lumineuse
+    const flashParticleCount = 200;
+    const particleGeometry = new THREE.BufferGeometry();
+    const particlePositions = new Float32Array(flashParticleCount * 3);
+    const particleVelocities = [];
+    
+    // Créer une explosion de particules blanches
+    for (let i = 0; i < flashParticleCount; i++) {
+        const i3 = i * 3;
+        // Début au centre de l'écran
+        particlePositions[i3] = 0;
+        particlePositions[i3 + 1] = 0;
+        particlePositions[i3 + 2] = -5;
+        
+        // Vélocité dans toutes les directions
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.05 + Math.random() * 0.2;
+        particleVelocities.push({
+            x: Math.cos(angle) * speed,
+            y: Math.sin(angle) * speed,
+            z: 0
+        });
+    }
+    
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+    
+    const particleMaterial = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.2,
+        transparent: true,
+        opacity: 0.8,
+        blending: THREE.AdditiveBlending
+    });
+    
+    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+    particleSystem.renderOrder = 1000;
+    scene.add(particleSystem);
+    
+    // Animation pour l'effet flash
     const flashAnimation = {
-        life: 20, // Frames to live
+        life: 30, // Plus long
+        system: particleSystem,
+        geometry: particleGeometry,
+        velocities: particleVelocities,
         update: function() {
-            // Fade out
-            flashEffect.material.opacity *= 0.9;
+            // Animation du flash principal
+            if (this.life > 25) {
+                flashEffect.material.opacity = 0.9;
+            } else {
+                flashEffect.material.opacity *= 0.85;
+            }
             
-            // Decrease life
+            // Animation des particules
+            const positions = this.geometry.attributes.position.array;
+            
+            for (let i = 0; i < flashParticleCount; i++) {
+                const i3 = i * 3;
+                const vel = this.velocities[i];
+                
+                // Mettre à jour la position avec la vélocité
+                positions[i3] += vel.x;
+                positions[i3 + 1] += vel.y;
+                positions[i3 + 2] += vel.z;
+                
+                // Augmenter légèrement la vitesse pour un effet d'explosion
+                vel.x *= 1.05;
+                vel.y *= 1.05;
+            }
+            
+            this.geometry.attributes.position.needsUpdate = true;
+            
+            // Diminuer l'opacité des particules
+            this.system.material.opacity = this.life / 40;
+            
+            // Diminuer la durée de vie
             this.life--;
             
-            // Remove when done
+            // Supprimer quand fini
             if (this.life <= 0) {
+                scene.remove(this.system);
                 flashEffect.material.opacity = 0;
                 return false;
             }
@@ -301,7 +470,7 @@ function showFlashEffect() {
         }
     };
     
-    // Add to array of effects to update
+    // Ajouter au tableau d'effets à mettre à jour
     effectsToUpdate.push(flashAnimation);
 }
 
@@ -334,7 +503,7 @@ function showBorderEffect() {
     effectsToUpdate.push(borderAnimation);
 }
 
-// Create a chicken based on level with more realistic model
+// Create a chicken based on level with more realistic model - Version corrigée
 function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const troopGroup = new THREE.Group();
     
@@ -356,6 +525,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
     body.scale.set(0.9, 1.2, 1.1); // Plus allongé verticalement
     body.position.y = 0.5 * sizeMultiplier;
+    body.castShadow = true;
     troopGroup.add(body);
     
     // Ajout d'un torse/poitrine plus bombé
@@ -363,53 +533,8 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const chest = new THREE.Mesh(chestGeometry, bodyMaterial);
     chest.scale.set(1.1, 1, 0.9);
     chest.position.set(0, 0.6 * sizeMultiplier, 0.15 * sizeMultiplier);
+    chest.castShadow = true;
     troopGroup.add(chest);
-    
-    // Ajout de plumes détaillées sur le corps
-    const feathersCount = 40 + level * 10;
-    for (let i = 0; i < feathersCount; i++) {
-        const featherGeometry = new THREE.PlaneGeometry(
-            0.1 * sizeMultiplier * (0.7 + Math.random() * 0.6),
-            0.2 * sizeMultiplier * (0.7 + Math.random() * 0.6)
-        );
-        
-        // Couleur légèrement variée
-        const hue = (troopColors[level] & 0xFF0000) >> 16;
-        const saturation = (troopColors[level] & 0x00FF00) >> 8;
-        const lightness = troopColors[level] & 0x0000FF;
-        
-        const featherColor = new THREE.Color(
-            hue / 255 * (0.9 + Math.random() * 0.2),
-            saturation / 255 * (0.9 + Math.random() * 0.2),
-            lightness / 255 * (0.9 + Math.random() * 0.2)
-        );
-        
-        const featherMaterial = new THREE.MeshPhongMaterial({
-            color: featherColor,
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.9
-        });
-        
-        const feather = new THREE.Mesh(featherGeometry, featherMaterial);
-        
-        // Position aléatoire sur le corps
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.random() * Math.PI - Math.PI/2;
-        const radius = 0.4 * sizeMultiplier;
-        
-        const x = radius * Math.sin(phi) * Math.cos(theta);
-        const y = 0.5 * sizeMultiplier + radius * Math.cos(phi);
-        const z = radius * Math.sin(phi) * Math.sin(theta);
-        
-        feather.position.set(x, y, z);
-        
-        // Orientation de la plume
-        feather.lookAt(0, y, 0);
-        feather.rotateX(Math.random() * Math.PI * 0.25);
-        
-        troopGroup.add(feather);
-    }
     
     // Tête plus détaillée
     const headGeometry = new THREE.SphereGeometry(0.28 * sizeMultiplier, 24, 24);
@@ -420,42 +545,23 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     
     const head = new THREE.Mesh(headGeometry, headMaterial);
     head.position.set(0, 0.9 * sizeMultiplier, 0.3 * sizeMultiplier);
+    head.castShadow = true;
     troopGroup.add(head);
     
     // Crête plus réaliste
-    const combGeometry = new THREE.BufferGeometry();
-    const vertices = [];
-    const combHeight = 0.3 * sizeMultiplier;
-    const combWidth = 0.15 * sizeMultiplier;
-    const segments = 5; // Nombre de "dents" de la crête
-    
-    for (let i = 0; i < segments; i++) {
-        const x = (i / (segments - 1) - 0.5) * combWidth;
-        vertices.push(
-            x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier, // Base
-            x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier, // Sommet
-            x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier // Base suivante
-        );
-        
-        if (i < segments - 1) {
-            vertices.push(
-                x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier, 0.3 * sizeMultiplier, // Base suivante
-                x, 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier, // Sommet actuel
-                x + combWidth/(segments-1), 0.9 * sizeMultiplier + 0.28 * sizeMultiplier + combHeight * (0.7 + 0.3 * Math.sin(i+1)), 0.3 * sizeMultiplier - 0.05 * sizeMultiplier // Sommet suivant
-            );
-        }
-    }
-    
-    combGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    combGeometry.computeVertexNormals();
-    
+    const combGeometry = new THREE.BoxGeometry(
+        0.15 * sizeMultiplier, 
+        0.2 * sizeMultiplier,
+        0.1 * sizeMultiplier
+    );
     const combMaterial = new THREE.MeshPhongMaterial({
         color: 0xff3333,
-        side: THREE.DoubleSide,
         shininess: 80
     });
     
     const comb = new THREE.Mesh(combGeometry, combMaterial);
+    comb.position.set(0, 1.1 * sizeMultiplier, 0.3 * sizeMultiplier);
+    comb.castShadow = true;
     troopGroup.add(comb);
     
     // Barbillon (wattle) sous le bec
@@ -468,6 +574,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const wattle = new THREE.Mesh(wattleGeometry, wattleMaterial);
     wattle.scale.set(0.6, 1, 0.5);
     wattle.position.set(0, 0.7 * sizeMultiplier, 0.5 * sizeMultiplier);
+    wattle.castShadow = true;
     troopGroup.add(wattle);
     
     // Bec plus réaliste
@@ -482,12 +589,14 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     beakUpper.rotation.x = Math.PI / 2;
     beakUpper.position.set(0, 0.85 * sizeMultiplier, 0.55 * sizeMultiplier);
     beakUpper.scale.set(1, 1, 0.5); // Aplatir le bec
+    beakUpper.castShadow = true;
     troopGroup.add(beakUpper);
     
     const beakLower = new THREE.Mesh(beakLowerGeometry, beakMaterial);
     beakLower.rotation.x = Math.PI / 2;
     beakLower.position.set(0, 0.75 * sizeMultiplier, 0.55 * sizeMultiplier);
     beakLower.scale.set(1, 1, 0.4); // Aplatir le bec inférieur
+    beakLower.castShadow = true;
     troopGroup.add(beakLower);
     
     // Yeux plus réalistes
@@ -534,56 +643,30 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     rightEyeHighlight.position.set(0.145 * sizeMultiplier, 0.91 * sizeMultiplier, 0.49 * sizeMultiplier);
     troopGroup.add(rightEyeHighlight);
     
-    // Ailes plus détaillées
-    const wingGeometry = new THREE.BufferGeometry();
-    const wingVertices = [];
-    const wingWidth = 0.5 * sizeMultiplier;
-    const wingLength = 0.6 * sizeMultiplier;
-    const wingSegments = 7;
-    
-    for (let i = 0; i < wingSegments; i++) {
-        const y1 = 0.3 * sizeMultiplier + (i / wingSegments) * 0.5 * sizeMultiplier;
-        const y2 = 0.3 * sizeMultiplier + ((i + 1) / wingSegments) * 0.5 * sizeMultiplier;
-        const width1 = wingWidth * (1 - i / wingSegments * 0.5);
-        const width2 = wingWidth * (1 - (i + 1) / wingSegments * 0.5);
-        const z1 = 0.1 * sizeMultiplier * Math.sin(i / wingSegments * Math.PI);
-        const z2 = 0.1 * sizeMultiplier * Math.sin((i + 1) / wingSegments * Math.PI);
-        
-        // Triangle 1
-        wingVertices.push(
-            0, y1, 0,
-            width1, y1, z1,
-            0, y2, 0
-        );
-        
-        // Triangle 2
-        wingVertices.push(
-            0, y2, 0,
-            width1, y1, z1,
-            width2, y2, z2
-        );
-    }
-    
-    wingGeometry.setAttribute('position', new THREE.Float32BufferAttribute(wingVertices, 3));
-    wingGeometry.computeVertexNormals();
+    // Ailes simples mais visibles et fonctionnelles (corrigé)
+    const wingGeometry = new THREE.BoxGeometry(
+        0.3 * sizeMultiplier,
+        0.5 * sizeMultiplier,
+        0.1 * sizeMultiplier
+    );
     
     const wingMaterial = new THREE.MeshPhongMaterial({
         color: troopColors[level],
-        side: THREE.DoubleSide,
         shininess: 30
     });
     
-    // Left wing
+    // Left wing - simplifiée mais fonctionnelle
     const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    leftWing.position.set(-0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    leftWing.rotation.z = -0.2; // Angle initial
+    leftWing.position.set(-0.4 * sizeMultiplier, 0.6 * sizeMultiplier, 0);
+    leftWing.rotation.z = -0.3; // Angle initial
+    leftWing.castShadow = true;
     troopGroup.add(leftWing);
     
-    // Right wing (mirrored)
+    // Right wing - simplifiée mais fonctionnelle
     const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
-    rightWing.position.set(0.4 * sizeMultiplier, 0.4 * sizeMultiplier, 0);
-    rightWing.rotation.z = 0.2; // Angle initial
-    rightWing.rotation.y = Math.PI; // Mirror
+    rightWing.position.set(0.4 * sizeMultiplier, 0.6 * sizeMultiplier, 0);
+    rightWing.rotation.z = 0.3; // Angle initial
+    rightWing.castShadow = true;
     troopGroup.add(rightWing);
     
     // Pattes plus réalistes
@@ -602,6 +685,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         const thigh = new THREE.Mesh(thighGeometry, legMaterial);
         thigh.position.set(xPos, 0.3 * sizeMultiplier, 0);
         thigh.rotation.z = 0.3; // Légère inclinaison
+        thigh.castShadow = true;
         troopGroup.add(thigh);
         
         // Partie inférieure de la patte
@@ -612,6 +696,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         );
         const shin = new THREE.Mesh(shinGeometry, legMaterial);
         shin.position.set(xPos, 0.13 * sizeMultiplier, 0);
+        shin.castShadow = true;
         troopGroup.add(shin);
         
         // Pied
@@ -622,6 +707,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         );
         const foot = new THREE.Mesh(footGeometry, legMaterial);
         foot.position.set(xPos, 0 * sizeMultiplier, 0.05 * sizeMultiplier);
+        foot.castShadow = true;
         troopGroup.add(foot);
         
         // Orteils
@@ -638,6 +724,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
                 0,
                 0.13 * sizeMultiplier
             );
+            toe.castShadow = true;
             troopGroup.add(toe);
         }
     }
@@ -654,31 +741,35 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     }));
     tail.position.set(0, 0.7 * sizeMultiplier, -0.4 * sizeMultiplier);
     tail.scale.set(1, 1.2, 0.8);
+    tail.castShadow = true;
     troopGroup.add(tail);
     
-    // Plumes de queue
-    for (let i = 0; i < 7; i++) {
-        const tailFeatherGeometry = new THREE.PlaneGeometry(
-            0.15 * sizeMultiplier,
-            0.4 * sizeMultiplier
+    // Plumes de queue simplifiées
+    const tailFeathersGroup = new THREE.Group();
+    for (let i = 0; i < 5; i++) {
+        const tailFeatherGeometry = new THREE.BoxGeometry(
+            0.08 * sizeMultiplier,
+            0.3 * sizeMultiplier,
+            0.02 * sizeMultiplier
         );
         const tailFeather = new THREE.Mesh(tailFeatherGeometry, new THREE.MeshPhongMaterial({
             color: troopColors[level],
-            side: THREE.DoubleSide,
-            transparent: true,
-            opacity: 0.9
+            shininess: 30
         }));
         
-        const angle = (i - 3) * 0.2;
+        const angle = (i - 2) * 0.2;
         tailFeather.position.set(
-            0.1 * sizeMultiplier * Math.sin(angle),
-            0.7 * sizeMultiplier,
-            -0.5 * sizeMultiplier - 0.1 * Math.cos(angle)
+            0.15 * sizeMultiplier * Math.sin(angle),
+            0.1 * sizeMultiplier,
+            -0.1 * sizeMultiplier * Math.cos(angle)
         );
         tailFeather.rotation.y = angle;
-        tailFeather.rotation.x = -0.3;
-        troopGroup.add(tailFeather);
+        tailFeather.rotation.x = -0.8;
+        tailFeather.castShadow = true;
+        tailFeathersGroup.add(tailFeather);
     }
+    tailFeathersGroup.position.set(0, 0.7 * sizeMultiplier, -0.4 * sizeMultiplier);
+    troopGroup.add(tailFeathersGroup);
     
     // Special accessories for higher levels
     if (level >= 3) {
@@ -697,6 +788,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         });
         const crown = new THREE.Mesh(crownGeometry, crownMaterial);
         crown.position.set(0, 1.2 * sizeMultiplier, 0.2 * sizeMultiplier);
+        crown.castShadow = true;
         troopGroup.add(crown);
         
         // Ajout de pointes à la couronne
@@ -711,6 +803,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
                 1.3 * sizeMultiplier,
                 Math.sin(angle) * 0.2 * sizeMultiplier + 0.2 * sizeMultiplier
             );
+            spike.castShadow = true;
             troopGroup.add(spike);
         }
         
@@ -723,6 +816,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
         });
         const gem = new THREE.Mesh(gemGeometry, gemMaterial);
         gem.position.set(0, 1.2 * sizeMultiplier, 0.4 * sizeMultiplier);
+        gem.castShadow = true;
         troopGroup.add(gem);
     }
     
@@ -826,9 +920,9 @@ function updateTroops() {
     
     // Create troops of each level in formation with better spacing
     let xPos = -6;
-    let zPos = -4; // Reculé davantage (était -2)
-    const xSpacing = 2.0; // Plus d'espace entre les poulets (était 1.5)
-    const zSpacing = 2.0; // Plus d'espace entre les rangées (était 1.5)
+    let zPos = -8; // Reculé davantage (était -4)
+    const xSpacing = 2.5; // Plus d'espace entre les poulets (était 2.0)
+    const zSpacing = 2.5; // Plus d'espace entre les rangées (était 2.0)
     
     // Create highest level troops first (bigger ones in back)
     for (let level = 9; level >= 0; level--) {
@@ -851,7 +945,7 @@ function updateTroops() {
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -4 }); // Reculé
+        const troop = createTroopMesh(0, { x: 0, z: -8 }); // Reculé davantage
         troopMeshes.push(troop);
         player = troop;
     }
