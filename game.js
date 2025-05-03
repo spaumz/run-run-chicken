@@ -770,6 +770,7 @@ function createRoadSegments() {
 }
 
 // Update road segments to avoid gaps
+// Update road segments to avoid gaps
 function updateRoadSegments() {
     if (gamePaused) return;
     
@@ -791,24 +792,6 @@ function updateRoadSegments() {
             segment.position.z -= totalRoadLength;
         }
     }
-    
-    // Animation des éléments du pont - simplifiée pour éviter les sauts
-    for (let i = 0; i < bridgeElements.length; i++) {
-        const element = bridgeElements[i];
-        
-        // Avancer l'élément
-        element.position.z += moveSpeed;
-        
-        // Si l'élément a dépassé la caméra, calculer son repositionnement exact
-        if (element.position.z > 80) {
-            // Déterminer la distance totale du cycle (tous les ponts alignés)
-            const totalPontLength = 200; // Longueur du cycle complet des ponts
-            
-            // Repositionner à la fin exacte de tous les ponts visibles
-            element.position.z -= totalPontLength;
-        }
-    }
-}
     
     // Animation fluide des éléments du pont - Même méthode que pour les segments de route
     const bridgeLength = 200; // Même valeur utilisée dans le code original
