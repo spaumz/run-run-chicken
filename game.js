@@ -648,6 +648,148 @@ function createRealisticBridgeRailings(xPos, zPos) {
 
 // Fonction pour créer une texture de route
 function createRoadTexture() {
+    const canvas = document.createElement('canvas');
+    // Augmenter la résolution de la texture
+    canvas.width = 1024;  // Doublé
+    canvas.height = 1024; // Doublé
+    const ctx = canvas.getContext('2d');
+    
+    // Fond gris foncé pour l'asphalte
+    ctx.fillStyle = '#444444';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Lignes blanches au milieu beaucoup plus larges
+    ctx.fillStyle = '#ffffff';
+    const dashLength = 60;  // Doublé
+    const dashGap = 40;     // Doublé
+    for (let y = 0; y < canvas.height; y += dashLength + dashGap) {
+        // Ligne centrale plus large (20px au lieu de 10px)
+        ctx.fillRect(canvas.width / 2 - 10, y, 20, dashLength);
+    }
+    
+    // Lignes de côté continues plus larges
+    ctx.fillRect(40, 0, 10, canvas.height);  // 10px de large au lieu de 5px
+    ctx.fillRect(canvas.width - 50, 0, 10, canvas.height);  // 10px de large au lieu de 5px
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 10);
+    
+    // Désactiver le filtrage pour des lignes plus nettes
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    
+    return texture;
+}
+
+// Fonction pour créer des segments de route sans trous
+function createRoadSegments() {
+    // Utilisons une taille fixe pour tous les segments
+    const segmentLength = 25;
+    const numSegments = 20;
+    
+    // Textures avec les nouvelles couleurs
+    const roadTexture = createRoadTexture();
+    const roadMaterial = new THREE.MeshPhongMaterial({
+        map: roadTexture,
+        color: 0xffffff, // Blanc pour préserver la texture
+        shininess: 20
+    });
+    
+    // CHANGEMENTS IMPORTANTS: Plus de chevauchement, alignement parfait
+    roadSegments = []; // Vider le tableau pour éviter les doublons
+    
+    // Créer un groupe unique pour tous les segments de route
+    const roadGroup = new THREE.Group();
+    scene.add(roadGroup);
+    
+    // Créer les segments en les positionnant exactement bout à bout
+    // Ajouter un petit chevauchement pour éviter les trous
+    const overlap = 0.1; // Petit chevauchement entre segments
+    
+    for (let i = 0; i < numSegments; i++) {
+        const segment = new THREE.Mesh(
+            // Ajouter un peu de longueur supplémentaire à chaque segment
+            new THREE.BoxGeometry(30, 0.5, segmentLength + overlap),
+            roadMaterial
+        );
+        
+        // Position exacte: chaque segment est placé légèrement avant la fin du précédent
+        segment.position.set(0, -0.25, -150 + (i * segmentLength));
+        segment.receiveShadow = true;
+        
+        // Stocker la position z initiale
+        segment.userData = { 
+            initialZ: segment.position.z,
+            segmentLength: segmentLength
+        };
+        
+        roadGroup.add(segment);
+        roadSegments.push(segment);
+    }
+    
+    // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
+    const transitionSegment1 = new THREE.Mesh(
+        new THREE.BoxGeometry(30, 0.5, 20), // Encore plus long (15 → 20)
+        roadMaterial
+    );
+    transitionSegment1.position.set(0, -0.25, 25); // Légèrement plus loin
+    transitionSegment1.receiveShadow = true;
+    scene.add(transitionSegment1);
+    roadSegments.push(transitionSegment1);
+    
+    const transitionSegment2 = new THREE.Mesh(
+        new THREE.BoxGeometry(30, 0.5, 20), // Encore plus long (15 → 20)
+        roadMaterial
+    );
+    transitionSegment2.position.set(0, -0.25, -150); // Plus loin en arrière
+    transitionSegment2.receiveShadow = true;
+    scene.add(transitionSegment2);
+    roadSegments.push(transitionSegment2);
+}
+
+// Fonction pour mettre à jour les segments de route
+function updateRoadSegments() {
+    if (gamePaused) return;
+    
+    // Vitesse de déplacement commune - on la réduit légèrement pour un mouvement plus fluide
+    const moveSpeed = 0.15;
+    
+    // Calculer la longueur totale de tous les segments de route
+    const totalRoadLength = roadSegments[0].userData.segmentLength * (roadSegments.length - 2);
+    
+    // Déplacer tous les segments de route ensemble
+    for (let i = 0; i < roadSegments.length; i++) {
+        const segment = roadSegments[i];
+        
+        // Avancer le segment
+        segment.position.z += moveSpeed;
+        
+        // Si le segment est trop avancé, le replacer exactement à l'arrière
+        if (segment.position.z > 50) {
+            segment.position.z -= totalRoadLength;
+        }
+    }
+    
+    // Déplacer également les éléments du pont
+    for (let i = 0; i < bridgeElements.length; i++) {
+        const element = bridgeElements[i];
+        
+        // Avancer l'élément du pont
+        element.position.z += moveSpeed;
+        
+        // Vérifier si l'élément doit être recyclé
+        // On utilise userData.initialZ comme référence pour le recyclage
+        // et element.userData.totalLength si elle existe, sinon on utilise totalRoadLength
+        const totalLength = element.userData.totalLength || totalRoadLength;
+        
+        if (element.position.z > 50) {
+            // Replacer l'élément à l'arrière
+            element.position.z -= totalLength;
+        }
+    }
+}
 
 // Fonction pour créer un curseur de souris
 function createMouseCursor() {
