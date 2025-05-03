@@ -306,18 +306,20 @@ function createBridgePylons() {
 
 // Fonction pour créer les câbles de suspension
 function createSuspensionCables() {
-    // Matériau pour les câbles
+    // Matériau pour les câbles - plus brillant et avec un effet spéculaire
     const cableMaterial = new THREE.MeshPhongMaterial({
-        color: 0xDD3333,
-        shininess: 80
+        color: 0xDD2222,
+        shininess: 100,
+        specular: 0x999999
     });
     
     // Groupe pour contenir tous les câbles
     const cablesGroup = new THREE.Group();
     
     // Créer les câbles principaux horizontaux (exactement de pylône à pylône)
+    // Cable principal plus épais
     const leftMainCable = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
+        new THREE.CylinderGeometry(0.5, 0.5, 280, 12), // Plus épais et plus long
         cableMaterial
     );
     leftMainCable.rotation.z = Math.PI / 2;
@@ -326,7 +328,7 @@ function createSuspensionCables() {
     cablesGroup.add(leftMainCable);
     
     const rightMainCable = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
+        new THREE.CylinderGeometry(0.5, 0.5, 280, 12), // Plus épais et plus long
         cableMaterial
     );
     rightMainCable.rotation.z = Math.PI / 2;
@@ -334,11 +336,11 @@ function createSuspensionCables() {
     rightMainCable.castShadow = true;
     cablesGroup.add(rightMainCable);
     
-    // Câbles verticaux - placés exactement
-    for (let z = -150; z <= 40; z += 10) {
+    // Câbles verticaux - plus nombreux et plus épais
+    for (let z = -180; z <= 80; z += 8) { // Plus de câbles avec espacement réduit
         // Câble gauche
         const leftCable = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
+            new THREE.CylinderGeometry(0.15, 0.15, 25, 6), // Plus épais
             cableMaterial
         );
         leftCable.position.set(-15, 12.5, z);
@@ -347,7 +349,7 @@ function createSuspensionCables() {
         
         // Câble droit
         const rightCable = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
+            new THREE.CylinderGeometry(0.15, 0.15, 25, 6), // Plus épais
             cableMaterial
         );
         rightCable.position.set(15, 12.5, z);
@@ -355,16 +357,45 @@ function createSuspensionCables() {
         cablesGroup.add(rightCable);
     }
     
+    // Ajouter des câbles diagonaux pour plus de réalisme
+    for (let z = -170; z <= 70; z += 16) {
+        // Angle des câbles diagonaux
+        const angle = Math.PI / 6; // 30 degrés
+        const diagonalLength = 30 / Math.cos(angle);
+        
+        // Câbles diagonaux gauches
+        const leftDiagonal = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, diagonalLength, 4),
+            cableMaterial
+        );
+        leftDiagonal.position.set(-15, 12.5, z);
+        leftDiagonal.rotation.x = Math.PI/2 - angle;
+        leftDiagonal.castShadow = true;
+        cablesGroup.add(leftDiagonal);
+        
+        // Câbles diagonaux droits
+        const rightDiagonal = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, diagonalLength, 4),
+            cableMaterial
+        );
+        rightDiagonal.position.set(15, 12.5, z);
+        rightDiagonal.rotation.x = Math.PI/2 - angle;
+        rightDiagonal.castShadow = true;
+        cablesGroup.add(rightDiagonal);
+    }
+    
     scene.add(cablesGroup);
     
-    // Enregistrer les informations exactes
+    // Enregistrer les informations exactes pour le mouvement
     cablesGroup.userData = { 
         initialZ: -50,
-        totalLength: 200
+        totalLength: 280 // Augmenté pour correspondre à la longueur des câbles principaux
     };
     
     // Ajouter aux éléments du pont
     bridgeElements.push(cablesGroup);
+    
+    return cablesGroup;
 }
 
 // Fonction pour créer des nuages
@@ -563,36 +594,38 @@ function createRealisticBridgeRailings(xPos, zPos) {
     
     // Matériau pour les rambardes principales (rouge plus vif)
     const railingMaterial = new THREE.MeshPhongMaterial({ 
-        color: 0xFF5733, // Rouge plus vif
-        shininess: 60
+        color: 0xFF3333, // Rouge plus vif
+        shininess: 80,
+        specular: 0x333333 // Ajout d'un effet spéculaire pour plus de réalisme
     });
     
     // Matériau pour les câbles
     const cableMaterial = new THREE.MeshPhongMaterial({
-        color: 0xDD3333, // Rouge plus foncé pour les câbles
-        shininess: 80
+        color: 0xAA0000, // Rouge plus foncé pour les câbles
+        shininess: 100,
+        specular: 0x666666
     });
     
     // Longueur totale des rambardes - augmentée pour couvrir toute la route
-    const railingLength = 200; // Était 150
+    const railingLength = 250; // Augmentée pour éviter les discontinuités
     const segmentLength = 10;
     const numSegments = Math.floor(railingLength / segmentLength);
     
-    // Base de la rambarde (barre horizontale du bas)
+    // Base de la rambarde (barre horizontale du bas - plus large)
     const baseRail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.5, 0.5, railingLength),
+        new THREE.BoxGeometry(0.8, 0.5, railingLength),
         railingMaterial
     );
-    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 60); // Ajusté pour couvrir plus de longueur
+    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 60);
     baseRail.castShadow = true;
     baseRail.receiveShadow = true;
     railingGroup.add(baseRail);
     
     // Créer les supports verticaux et la barre du haut
     for (let i = 0; i <= numSegments; i++) {
-        // Support vertical
+        // Support vertical - plus épais
         const verticalPost = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 1.5, 0.5),
+            new THREE.BoxGeometry(0.8, 1.8, 0.8),
             railingMaterial
         );
         
@@ -602,10 +635,10 @@ function createRealisticBridgeRailings(xPos, zPos) {
         verticalPost.receiveShadow = true;
         railingGroup.add(verticalPost);
         
-        // Barres horizontales supplémentaires (rambarde supérieure)
+        // Barres horizontales supérieures (rambarde supérieure - plus large)
         if (i < numSegments) {
             const topRail = new THREE.Mesh(
-                new THREE.BoxGeometry(0.5, 0.5, segmentLength + 0.1),
+                new THREE.BoxGeometry(0.8, 0.5, segmentLength + 0.1),
                 railingMaterial
             );
             topRail.position.set(0, 2.25, postZ + segmentLength/2);
@@ -613,9 +646,9 @@ function createRealisticBridgeRailings(xPos, zPos) {
             topRail.receiveShadow = true;
             railingGroup.add(topRail);
             
-            // Ajouter des câbles diagonaux entre les supports
+            // Ajouter des câbles diagonaux plus épais et avec plus de détails
             const cable = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.05, 0.05, Math.sqrt(Math.pow(segmentLength, 2) + Math.pow(1.5, 2))),
+                new THREE.CylinderGeometry(0.08, 0.08, Math.sqrt(Math.pow(segmentLength, 2) + Math.pow(1.5, 2))),
                 cableMaterial
             );
             
@@ -635,9 +668,12 @@ function createRealisticBridgeRailings(xPos, zPos) {
     railingGroup.position.x = xPos;
     
     // Stocker la position initiale pour l'animation fluide
-    railingGroup.userData = { initialZ: zPos };
+    railingGroup.userData = { 
+        initialZ: zPos,
+        totalLength: railingLength
+    };
     
-    // Ajouter à la liste des éléments du pont au lieu de roadSegments
+    // Ajouter à la liste des éléments du pont
     bridgeElements.push(railingGroup);
     
     // Ajouter le groupe à la scène
