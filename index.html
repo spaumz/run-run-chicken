@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Run Run Chicken!</title>
     <style>
+        /* Base styles */
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #000;
         }
         #game-container {
             width: 100%;
@@ -22,12 +25,13 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 20px 40px;
-            border-radius: 10px;
+            padding: 30px 50px;
+            border-radius: 15px;
             text-align: center;
             z-index: 10;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
         #start-button {
             background-color: #4CAF50;
@@ -37,10 +41,17 @@
             text-align: center;
             text-decoration: none;
             display: inline-block;
-            font-size: 16px;
-            margin: 10px 2px;
+            font-size: 18px;
+            margin: 15px 2px;
             cursor: pointer;
-            border-radius: 5px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        #start-button:hover {
+            background-color: #3e8e41;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
         }
         #ui {
             position: absolute;
@@ -48,25 +59,50 @@
             left: 20px;
             color: white;
             font-size: 24px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            background: rgba(0,0,0,0.3);
-            padding: 10px 20px;
-            border-radius: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.5);
+            padding: 15px 25px;
+            border-radius: 15px;
             z-index: 5;
             display: none;
+            transition: all 0.3s ease;
+        }
+        .stat {
+            margin: 5px 0;
         }
         #game-over {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 20px 40px;
-            border-radius: 10px;
+            padding: 30px 50px;
+            border-radius: 15px;
             text-align: center;
             z-index: 10;
             display: none;
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.4);
+        }
+        #restart-button {
+            background-color: #f44336;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 18px;
+            margin: 15px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        #restart-button:hover {
+            background-color: #d32f2f;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
         }
         #pause-screen {
             position: absolute;
@@ -75,11 +111,12 @@
             transform: translate(-50%, -50%);
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
-            padding: 20px 40px;
-            border-radius: 10px;
+            padding: 30px 50px;
+            border-radius: 15px;
             text-align: center;
             z-index: 10;
             display: none;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
         }
         #controls-info {
             position: absolute;
@@ -87,198 +124,92 @@
             left: 20px;
             color: white;
             font-size: 16px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            background: rgba(0,0,0,0.3);
-            padding: 10px;
-            border-radius: 5px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.5);
+            padding: 12px 20px;
+            border-radius: 8px;
             z-index: 5;
             display: none;
         }
-        /* Effet de flash blanc pour les bonus */
-@keyframes flashEffect {
-    0% { opacity: 0; }
-    25% { opacity: 0.5; }
-    100% { opacity: 0; }
-}
 
-/* Effet de bordure rouge pour les malus */
-@keyframes borderEffect {
-    0% { box-shadow: inset 0 0 0 5px rgba(255, 0, 0, 0); }
-    25% { box-shadow: inset 0 0 0 20px rgba(255, 0, 0, 0.5); }
-    100% { box-shadow: inset 0 0 0 5px rgba(255, 0, 0, 0); }
-}
+        /* Effet de flash blanc amélioré pour les bonus */
+        @keyframes flashEffect {
+            0% { opacity: 0; }
+            10% { opacity: 0.9; }
+            20% { opacity: 0.5; }
+            30% { opacity: 0.8; }
+            40% { opacity: 0.3; }
+            60% { opacity: 0.2; }
+            100% { opacity: 0; }
+        }
 
-/* Optionnel: effet de vibration pour les malus */
-@keyframes shakeEffect {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    50% { transform: translateX(5px); }
-    75% { transform: translateX(-2px); }
-    100% { transform: translateX(0); }
-}
+        /* Effet de rayons lumineux qui se propagent */
+        @keyframes rayEffect {
+            0% { transform: scale(0.5); opacity: 0.8; }
+            50% { transform: scale(1.5); opacity: 0.4; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
 
-/* Ces animations seront déclenchées via JavaScript */
-.flash-effect {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: white;
-    pointer-events: none;
-    opacity: 0;
-    z-index: 100;
-    animation: flashEffect 0.3s forwards;
-}
+        /* Effet de bordure rouge pour les malus */
+        @keyframes borderEffect {
+            0% { box-shadow: inset 0 0 0 5px rgba(255, 0, 0, 0); }
+            25% { box-shadow: inset 0 0 0 30px rgba(255, 0, 0, 0.6); }
+            50% { box-shadow: inset 0 0 0 20px rgba(255, 0, 0, 0.5); }
+            75% { box-shadow: inset 0 0 0 25px rgba(255, 0, 0, 0.3); }
+            100% { box-shadow: inset 0 0 0 5px rgba(255, 0, 0, 0); }
+        }
 
-.border-effect {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 100;
-    animation: borderEffect 0.5s forwards, shakeEffect 0.3s forwards;
-}
+        /* Effet de vibration pour les malus */
+        @keyframes shakeEffect {
+            0% { transform: translateX(0); }
+            10% { transform: translateX(-10px); }
+            20% { transform: translateX(8px); }
+            30% { transform: translateX(-6px); }
+            40% { transform: translateX(4px); }
+            50% { transform: translateX(-2px); }
+            60% { transform: translateX(1px); }
+            100% { transform: translateX(0); }
+        }
 
-/* Améliorations générales */
-body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-    background-color: #000;
-}
+        /* Classes pour les effets visuels */
+        .flash-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: white;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 100;
+            animation: flashEffect 0.5s forwards;
+        }
 
-#game-container {
-    width: 100%;
-    height: 100vh;
-    position: relative;
-    overflow: hidden;
-    margin: 0 auto;
-}
+        .ray-effect {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 200px;
+            height: 200px;
+            margin-left: -100px;
+            margin-top: -100px;
+            background: radial-gradient(circle, white 0%, rgba(255,255,255,0) 70%);
+            pointer-events: none;
+            opacity: 0;
+            z-index: 99;
+            animation: rayEffect 0.6s forwards;
+        }
 
-#menu {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 30px 50px;
-    border-radius: 15px;
-    text-align: center;
-    z-index: 10;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-}
-
-#start-button {
-    background-color: #4CAF50;
-    border: none;
-    color: white;
-    padding: 15px 32px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 18px;
-    margin: 15px 2px;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-}
-
-#start-button:hover {
-    background-color: #3e8e41;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-}
-
-#ui {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    color: white;
-    font-size: 24px;
-    text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
-    background: rgba(0,0,0,0.5);
-    padding: 15px 25px;
-    border-radius: 15px;
-    z-index: 5;
-    display: none;
-    transition: all 0.3s ease;
-}
-
-.stat {
-    margin: 5px 0;
-}
-
-#game-over {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 30px 50px;
-    border-radius: 15px;
-    text-align: center;
-    z-index: 10;
-    display: none;
-    box-shadow: 0 0 30px rgba(255, 0, 0, 0.4);
-}
-
-#restart-button {
-    background-color: #f44336;
-    border: none;
-    color: white;
-    padding: 15px 32px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 18px;
-    margin: 15px 2px;
-    cursor: pointer;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
-}
-
-#restart-button:hover {
-    background-color: #d32f2f;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.3);
-}
-
-#pause-screen {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: rgba(0, 0, 0, 0.7);
-    color: white;
-    padding: 30px 50px;
-    border-radius: 15px;
-    text-align: center;
-    z-index: 10;
-    display: none;
-    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-}
-
-#controls-info {
-    position: absolute;
-    bottom: 20px;
-    left: 20px;
-    color: white;
-    font-size: 16px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
-    background: rgba(0,0,0,0.5);
-    padding: 12px 20px;
-    border-radius: 8px;
-    z-index: 5;
-    display: none;
-}
+        .border-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 100;
+            animation: borderEffect 0.6s forwards, shakeEffect 0.4s forwards;
+        }
     </style>
 </head>
 <body>
@@ -309,8 +240,50 @@ body {
         <div id="controls-info">
             Utilisez la souris pour déplacer vos poulets | P = Pause
         </div>
+        
+        <!-- Containers pour les effets visuels -->
+        <div id="flash-container"></div>
+        <div id="border-container"></div>
     </div>
 
     <script type="module" src="game.js"></script>
+
+    <!-- Script pour gérer les effets CSS en complément des effets 3D -->
+    <script>
+        // Cette fonction sera appelée depuis game.js lors d'un bonus
+        window.showCSSFlashEffect = function() {
+            const container = document.getElementById('flash-container');
+            
+            // Créer l'effet de flash
+            const flashElement = document.createElement('div');
+            flashElement.className = 'flash-effect';
+            container.appendChild(flashElement);
+            
+            // Créer l'effet de rayons
+            const rayElement = document.createElement('div');
+            rayElement.className = 'ray-effect';
+            container.appendChild(rayElement);
+            
+            // Supprimer les éléments après l'animation
+            setTimeout(() => {
+                container.removeChild(flashElement);
+                container.removeChild(rayElement);
+            }, 600);
+        };
+        
+        // Cette fonction sera appelée depuis game.js lors d'un malus
+        window.showCSSBorderEffect = function() {
+            const container = document.getElementById('border-container');
+            
+            const borderElement = document.createElement('div');
+            borderElement.className = 'border-effect';
+            container.appendChild(borderElement);
+            
+            // Supprimer l'élément après l'animation
+            setTimeout(() => {
+                container.removeChild(borderElement);
+            }, 600);
+        };
+    </script>
 </body>
 </html>
