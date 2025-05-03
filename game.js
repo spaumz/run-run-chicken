@@ -7,7 +7,7 @@ let gameStarted = false;
 let gameOver = false;
 let gamePaused = false;
 let troops = 1;
-let score = 0;
+let score = 0; // Maintenu pour compatibilité mais non utilisé
 let fusionRate = 1;
 let multipliers = [];
 let troopMeshes = [];
@@ -20,16 +20,21 @@ let roadSegments = [];
 let waterLeft, waterRight;
 let effectsToUpdate = [];
 
-// Max troop visualization - Increased as requested
+// Max troop visualization
 const MAX_TROOPS_DISPLAYED = 30;
 
-// Colors for evolved troops
+// Colors for evolved troops - Beaucoup plus de niveaux avec des couleurs vives
 const troopColors = [
     0xffff00,  // Jaune vif - Level 1
     0xff6600,  // Orange vif - Level 2
     0xff3399,  // Rose vif - Level 3
     0x66ff33,  // Vert lime - Level 4
-    0x00ffff   // Cyan - Level 5
+    0x00ffff,  // Cyan - Level 5
+    0xff00ff,  // Magenta - Level 6
+    0x9933ff,  // Violet - Level 7
+    0xff3300,  // Rouge-orange - Level 8
+    0x0099ff,  // Bleu ciel - Level 9
+    0x33cc33   // Vert émeraude - Level 10
 ];
 
 // Get DOM elements
@@ -59,14 +64,14 @@ function init() {
     scene.background = new THREE.Color(0x87CEEB);
     
     // Create camera - Vue plus plongeante
-camera = new THREE.PerspectiveCamera(
-    80,  // Angle légèrement réduit pour un meilleur zoom
-    gameContainer.clientWidth / gameContainer.clientHeight, 
-    0.1, 
-    1000
-);
-camera.position.set(0, 18, 5); // Position plus proche de la route (z réduit)
-camera.lookAt(0, 0, -10);     // Point de focus plus proche
+    camera = new THREE.PerspectiveCamera(
+        80,  // Angle légèrement réduit pour un meilleur zoom
+        gameContainer.clientWidth / gameContainer.clientHeight, 
+        0.1, 
+        1000
+    );
+    camera.position.set(0, 18, 5); // Position plus proche de la route
+    camera.lookAt(0, 0, -10);     // Point de focus plus proche
     
     // Create renderer
     renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -87,19 +92,19 @@ camera.lookAt(0, 0, -10);     // Point de focus plus proche
     // Create road segments (instead of a single bridge)
     createRoadSegments();
     
-    // Create rails
+    // Create rails - Route élargie
     const leftRail = new THREE.Mesh(
         new THREE.BoxGeometry(0.5, 1.5, 100),
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
-    leftRail.position.set(-12, 0.75, -20);
+    leftRail.position.set(-12, 0.75, -20); // Position ajustée pour une route plus large
     scene.add(leftRail);
     
     const rightRail = new THREE.Mesh(
         new THREE.BoxGeometry(0.5, 1.5, 100),
         new THREE.MeshPhongMaterial({ color: 0xcc3333 })
     );
-    rightRail.position.set(12, 0.75, -20);
+    rightRail.position.set(12, 0.75, -20); // Position ajustée pour une route plus large
     scene.add(rightRail);
     
     // Create mouse cursor
@@ -157,9 +162,9 @@ function createRoadSegments() {
         });
         
         const segment = new THREE.Mesh(
-    new THREE.BoxGeometry(24, 0.5, segmentLength),
-    roadMaterial
-);
+            new THREE.BoxGeometry(24, 0.5, segmentLength), // Route élargie (24 au lieu de 20)
+            roadMaterial
+        );
         
         segment.position.set(0, -0.25, -20 + (i - numSegments/2) * segmentLength);
         scene.add(segment);
@@ -233,45 +238,6 @@ function createMouseCursor() {
     scene.add(mouseCursor);
 }
 
-// Create text texture for door labels - Updated to match the reference image
-function createTextTexture(text, backgroundColor, isPositive) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
-    
-    const ctx = canvas.getContext("2d");
-    
-    // Background color (blue for multiplication, etc.)
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add gradient effect
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, "rgba(255, 255, 255, 0.3)");
-    gradient.addColorStop(1, "rgba(0, 0, 0, 0.2)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add border
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "#ffffff";
-    ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
-    
-    // Text in white with shadow
-    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 5;
-    ctx.shadowOffsetY = 5;
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 140px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-    
-    return new THREE.CanvasTexture(canvas);
-}
-
-// Create a chicken based on level
 // Create a chicken based on level
 function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const troopGroup = new THREE.Group();
@@ -429,16 +395,31 @@ function updateTroops() {
     
     // Count how many troops of each level we need
     let remainingTroops = troops;
-    let troopCounts = [0, 0, 0, 0, 0]; // Level 1-5
+    let troopCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // Level 1-10
     
     // Calculate troop distribution using fusion rate
     while (remainingTroops > 0) {
-        if (remainingTroops >= 100 * fusionRate) {
-            troopCounts[4]++;
+        if (remainingTroops >= 500 * fusionRate) {
+            troopCounts[9]++;
+            remainingTroops -= 500 * fusionRate;
+        } else if (remainingTroops >= 300 * fusionRate) {
+            troopCounts[8]++;
+            remainingTroops -= 300 * fusionRate;
+        } else if (remainingTroops >= 200 * fusionRate) {
+            troopCounts[7]++;
+            remainingTroops -= 200 * fusionRate;
+        } else if (remainingTroops >= 150 * fusionRate) {
+            troopCounts[6]++;
+            remainingTroops -= 150 * fusionRate;
+        } else if (remainingTroops >= 100 * fusionRate) {
+            troopCounts[5]++;
             remainingTroops -= 100 * fusionRate;
         } else if (remainingTroops >= 50 * fusionRate) {
-            troopCounts[3]++;
+            troopCounts[4]++;
             remainingTroops -= 50 * fusionRate;
+        } else if (remainingTroops >= 20 * fusionRate) {
+            troopCounts[3]++;
+            remainingTroops -= 20 * fusionRate;
         } else if (remainingTroops >= 10 * fusionRate) {
             troopCounts[2]++;
             remainingTroops -= 10 * fusionRate;
@@ -459,10 +440,10 @@ function updateTroops() {
     
     // Create troops of each level in formation
     let xPos = -6;
-    let zPos = 0;
+    let zPos = -2; // Reculé par rapport à l'original
     
     // Create highest level troops first (bigger ones in back)
-    for (let level = 4; level >= 0; level--) {
+    for (let level = 9; level >= 0; level--) {
         const count = troopCounts[level];
         for (let i = 0; i < count && troopMeshes.length < MAX_TROOPS_DISPLAYED; i++) {
             const troop = createTroopMesh(level, { x: xPos, z: zPos });
@@ -482,7 +463,7 @@ function updateTroops() {
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: 0 });
+        const troop = createTroopMesh(0, { x: 0, z: -2 }); // Reculé
         troopMeshes.push(troop);
         player = troop;
     }
@@ -494,19 +475,19 @@ function createMultiplier() {
     const types = [
         { op: "+", color: 0x00ddff, min: 1, max: 5, positive: true },  // Brighter blue for addition
         { op: "-", color: 0xff2222, min: 1, max: 10, positive: false }, // Vibrant red for subtraction
-        { op: "×", color: 0x00ddff, min: 2, max: 5, positive: true },  // Brighter blue for multiplication
+        { op: "×", color: 0x00ddff, min: 2, max: 3, positive: true },  // Multiplication max 3 au lieu de 5
         { op: "÷", color: 0xff2222, min: 2, max: 3, positive: false }  // Vibrant red for division
     ];
     
-    // Randomly select type
+    // Randomly select type - plus de malus que de bonus
     let typeIndex;
-if (Math.random() < 0.65) { // 65% de chance d'avoir un malus
-    // Sélection parmi les malus (index 1 et 3)
-    typeIndex = Math.random() < 0.5 ? 1 : 3; // - ou ÷
-} else {
-    // Sélection parmi les bonus (index 0 et 2)
-    typeIndex = Math.random() < 0.5 ? 0 : 2; // + ou ×
-}
+    if (Math.random() < 0.65) { // 65% de chance d'avoir un malus
+        // Sélection parmi les malus (index 1 et 3)
+        typeIndex = Math.random() < 0.5 ? 1 : 3; // - ou ÷
+    } else {
+        // Sélection parmi les bonus (index 0 et 2)
+        typeIndex = Math.random() < 0.5 ? 0 : 2; // + ou ×
+    }
     const type = types[typeIndex];
     
     // Generate value
@@ -640,9 +621,9 @@ if (Math.random() < 0.65) { // 65% de chance d'avoir un malus
     const particles = new THREE.Points(particleGeometry, particleMaterial);
     doorGroup.add(particles);
     
-    // Set random position on x-axis (wider range for 3-lane road)
-    const x = Math.random() * 16 - 8; // Between -8 and 8
-    doorGroup.position.set(x, 0, -80);
+    // Set random position on x-axis et très loin en z pour apparition
+    const x = Math.random() * 20 - 10; // Entre -10 et 10
+    doorGroup.position.set(x, 0, -120); // -120 au lieu de -80 pour apparaître beaucoup plus loin
     
     // Add to scene and multipliers array
     scene.add(doorGroup);
@@ -773,7 +754,7 @@ function handleMouseMove(event) {
     const mouseX = ((event.clientX - rect.left) / gameContainer.clientWidth) * 2 - 1;
     
     // Convert to world coordinates (wider range for 3-lane road)
-    targetPlayerX = mouseX * 10;
+    targetPlayerX = mouseX * 10; // Multiplier par 10 au lieu de 8 pour la route plus large
     
     // Update cursor position
     if (mouseCursor) {
@@ -834,10 +815,8 @@ function restartGame() {
 // Update UI
 function updateUI() {
     troopsCount.textContent = troops;
-    scoreCount.textContent = score;
     fusionRateElement.textContent = fusionRate;
-    finalScore.textContent = score;
-    finalFusionRate.textContent = fusionRate;
+    finalScore.textContent = troops; // Le score final est le nombre de poulets
 }
 
 // Check for game over
@@ -873,7 +852,7 @@ function animate(time) {
             player.position.x += (targetPlayerX - player.position.x) * 0.05;
             
             // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-11, Math.min(11, player.position.x)); 
+            player.position.x = Math.max(-11, Math.min(11, player.position.x)); // Limites plus larges
             
             // Move all troops to follow the leader in formation
             for (let i = 1; i < troopMeshes.length; i++) {
@@ -916,6 +895,14 @@ function animate(time) {
             }
             if (player.children[6]) { // Right wing
                 player.children[6].rotation.z = -Math.sin(now * 10) * 0.2;
+            }
+            
+            // Animer les particules des poulets évolués
+            for (let i = 0; i < troopMeshes.length; i++) {
+                const troop = troopMeshes[i];
+                if (troop.particles) {
+                    troop.particles.rotation.y += 0.02; // Rotation des particules
+                }
             }
         }
         
@@ -964,18 +951,9 @@ function animate(time) {
                 const oldTroops = troops;
                 troops = multiplier.effect(troops);
                 
-                // Add score based on the effect
-                if (troops > oldTroops) {
-                    // Bonus for positive gain
-                    score += (troops - oldTroops) * 10;
-                    
-                    // Increase fusion rate on significant troop gain
-                    if (troops > oldTroops * 2 && troops > 50) {
-                        fusionRate = Math.min(fusionRate + 1, 10);
-                    }
-                } else {
-                    // Some points even for negative multipliers
-                    score += 5;
+                // Fusion rate ne change que sur gain important
+                if (troops > oldTroops * 2 && troops > 50) {
+                    fusionRate = Math.min(fusionRate + 1, 10);
                 }
                 
                 // Update troops visualization
