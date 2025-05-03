@@ -648,43 +648,55 @@ function createRealisticBridgeRailings(xPos, zPos) {
 
 // Fonction pour créer une texture de route
 function createRoadTexture() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1024;
-    const ctx = canvas.getContext('2d');
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext("2d");
     
-    // Fond noir/gris foncé pour l'asphalte (comme dans votre exemple)
-    ctx.fillStyle = '#333333';
+    // Road background
+    ctx.fillStyle = "#333333"; // Gris foncé
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Lignes blanches pointillées au milieu (comme dans votre exemple)
-    ctx.fillStyle = '#ffffff';
-    const dashLength = 80;
-    const dashGap = 50;
+    // Lane markings (3 lanes) avec marquages plus longs
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 8; // Ligne plus épaisse (était 5)
+    ctx.setLineDash([40, 20]); // Marquages plus longs (était [20, 20])
     
-    // Ligne du milieu pointillée
-    for (let y = 0; y < canvas.height; y += dashLength + dashGap) {
-        // Ligne centrale plus large (15px)
-        ctx.fillRect(canvas.width / 2 - 7.5, y, 15, dashLength);
-    }
+    // Left lane divider
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 3, 0);
+    ctx.lineTo(canvas.width / 3, canvas.height);
+    ctx.stroke();
     
-    // Lignes de côté continues
-    const sideLineWidth = 15;
-    // Ligne gauche continue
-    ctx.fillRect(sideLineWidth * 2, 0, sideLineWidth, canvas.height);
-    // Ligne droite continue
-    ctx.fillRect(canvas.width - sideLineWidth * 3, 0, sideLineWidth, canvas.height);
+    // Right lane divider
+    ctx.beginPath();
+    ctx.moveTo(canvas.width * 2 / 3, 0);
+    ctx.lineTo(canvas.width * 2 / 3, canvas.height);
+    ctx.stroke();
     
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 10);
+    // Ajout de marquages au centre de chaque voie pour plus de détail
+    ctx.setLineDash([10, 50]); // Marquages courts
+    ctx.lineWidth = 4; // Ligne plus fine
     
-    // Important: désactiver le filtrage pour des lignes nettes
-    texture.minFilter = THREE.NearestFilter;
-    texture.magFilter = THREE.NearestFilter;
+    // Marquage centre voie gauche
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 6, 0);
+    ctx.lineTo(canvas.width / 6, canvas.height);
+    ctx.stroke();
     
-    return texture;
+    // Marquage centre voie centrale
+    ctx.beginPath();
+    ctx.moveTo(canvas.width / 2, 0);
+    ctx.lineTo(canvas.width / 2, canvas.height);
+    ctx.stroke();
+    
+    // Marquage centre voie droite
+    ctx.beginPath();
+    ctx.moveTo(canvas.width * 5 / 6, 0);
+    ctx.lineTo(canvas.width * 5 / 6, canvas.height);
+    ctx.stroke();
+    
+    return new THREE.CanvasTexture(canvas);
 }
 
 // Fonction pour créer des segments de route sans trous
