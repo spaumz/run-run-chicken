@@ -285,6 +285,21 @@
                 container.removeChild(borderElement);
             }, 600);
         };
+
+        // Attendre que le module soit chargé avant d'ajouter les événements
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("DOM Loaded, waiting for game.js to initialize...");
+        });
+
+        // Vérifier périodiquement si les fonctions du jeu sont disponibles
+        let checkInterval = setInterval(function() {
+            if (window.gameInitialized) {
+                clearInterval(checkInterval);
+                console.log("Game initialized, binding events...");
+                
+                // Les événements sont maintenant gérés dans game.js
+            }
+        }, 100);
     </script>
 </body>
 </html>
