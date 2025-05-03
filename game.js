@@ -105,7 +105,10 @@ function init() {
     fillLight.position.set(-10, 10, -10);
     scene.add(fillLight);
     
-    // Create water surfaces on both sides of the road
+    // Create enhanced bridge environment
+    createBridgeEnvironment();
+    
+    // Create water surfaces
     createWaterSurfaces();
     
     // Create road segments (instead of a single bridge)
@@ -140,6 +143,359 @@ function init() {
     animate();
 }
 
+// Fonction pour créer l'ensemble du décor du pont
+function createBridgeEnvironment() {
+    // Créer le brouillard pour l'atmosphère (effet de profondeur)
+    scene.fog = new THREE.Fog(0x87CEEB, 50, 150);
+    
+    // Créer le ciel avec dégradé
+    createSkybox();
+    
+    // Ajouter des pylônes de pont
+    createBridgePylons();
+    
+    // Ajouter des nuages
+    createClouds();
+    
+    // Ajouter des oiseaux qui volent au loin
+    createFlyingBirds();
+    
+    // Ajouter des câbles de suspension pour le pont
+    createSuspensionCables();
+}
+
+// Fonction pour créer un skybox avec dégradé
+function createSkybox() {
+    const vertexShader = `
+    varying vec3 vWorldPosition;
+    void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`;
+
+    const fragmentShader = `
+    uniform vec3 topColor;
+    uniform vec3 bottomColor;
+    uniform float offset;
+    uniform float exponent;
+    varying vec3 vWorldPosition;
+    void main() {
+        float h = normalize(vWorldPosition + offset).y;
+        gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+    }`;
+
+    const uniforms = {
+        topColor: { value: new THREE.Color(0x0077ff) },
+        bottomColor: { value: new THREE.Color(0x89cff0) },
+        offset: { value: 10 },
+        exponent: { value: 0.6 }
+    };
+
+    const skyGeo = new THREE.SphereGeometry(500, 32, 15);
+    const skyMat = new THREE.ShaderMaterial({
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader,
+        uniforms: uniforms,
+        side: THREE.BackSide
+    });
+
+    const sky = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(sky);
+}
+
+// Fonction pour créer des pylônes de pont
+function createBridgePylons() {
+    // Matériaux pour les pylônes
+    const pylonMaterial = new THREE.MeshPhongMaterial({
+        color: 0xEB806C,
+        shininess: 30
+    });
+    
+    const metalMaterial = new THREE.MeshPhongMaterial({
+        color: 0x888888,
+        shininess: 80,
+        metalness: 0.5
+    });
+    
+    // Création des pylônes principaux (en forme de H)
+    function createPylon(zPosition) {
+        const pylonGroup = new THREE.Group();
+        
+        // Piliers verticaux
+        const leftPillar = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 40, 2),
+            pylonMaterial
+        );
+        leftPillar.position.set(-16, 10, zPosition);
+        leftPillar.castShadow = true;
+        pylonGroup.add(leftPillar);
+        
+        const rightPillar = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 40, 2),
+            pylonMaterial
+        );
+        rightPillar.position.set(16, 10, zPosition);
+        rightPillar.castShadow = true;
+        pylonGroup.add(rightPillar);
+        
+        // Connexion horizontale
+        const connector = new THREE.Mesh(
+            new THREE.BoxGeometry(34, 2, 2),
+            pylonMaterial
+        );
+        connector.position.set(0, 25, zPosition);
+        connector.castShadow = true;
+        pylonGroup.add(connector);
+        
+        // Détails métalliques
+        for (let y = 5; y < 25; y += 5) {
+            const leftDetail = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.5, 3),
+                metalMaterial
+            );
+            leftDetail.position.set(-16, y, zPosition);
+            pylonGroup.add(leftDetail);
+            
+            const rightDetail = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 0.5, 3),
+                metalMaterial
+            );
+            rightDetail.position.set(16, y, zPosition);
+            pylonGroup.add(rightDetail);
+        }
+        
+        return pylonGroup;
+    }
+    
+    // Créer plusieurs pylônes à différentes distances
+    const pylon1 = createPylon(-60);
+    scene.add(pylon1);
+    
+    const pylon2 = createPylon(-120);
+    scene.add(pylon2);
+    
+    const pylon3 = createPylon(20);
+    scene.add(pylon3);
+}
+
+// Fonction pour créer des nuages
+function createClouds() {
+    const cloudGroup = new THREE.Group();
+    
+    // Matériau pour les nuages
+    const cloudMaterial = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    // Fonction pour créer un nuage individuel
+    function createCloud(x, y, z, scale) {
+        const cloud = new THREE.Group();
+        
+        // Ajouter plusieurs sphères pour former un nuage
+        const geometries = [
+            new THREE.SphereGeometry(2, 8, 8),
+            new THREE.SphereGeometry(1.5, 8, 8),
+            new THREE.SphereGeometry(1.8, 8, 8),
+            new THREE.SphereGeometry(1.7, 8, 8),
+            new THREE.SphereGeometry(1.6, 8, 8)
+        ];
+        
+        const positions = [
+            [0, 0, 0],
+            [-2, 0.3, 0.2],
+            [2, 0.1, 0.3],
+            [0, 0.5, -2],
+            [0.3, 0.4, 2]
+        ];
+        
+        for (let i = 0; i < geometries.length; i++) {
+            const part = new THREE.Mesh(geometries[i], cloudMaterial);
+            part.position.set(positions[i][0], positions[i][1], positions[i][2]);
+            cloud.add(part);
+        }
+        
+        cloud.position.set(x, y, z);
+        cloud.scale.set(scale, scale, scale);
+        
+        return cloud;
+    }
+    
+    // Créer plusieurs nuages à différentes positions
+    for (let i = 0; i < 20; i++) {
+        const x = (Math.random() - 0.5) * 200;
+        const y = 30 + Math.random() * 20;
+        const z = (Math.random() - 0.5) * 300;
+        const scale = 2 + Math.random() * 3;
+        
+        const cloud = createCloud(x, y, z, scale);
+        cloudGroup.add(cloud);
+    }
+    
+    scene.add(cloudGroup);
+    
+    // Animation des nuages
+    function animateClouds() {
+        cloudGroup.children.forEach(cloud => {
+            cloud.position.z += 0.02;
+            if (cloud.position.z > 150) {
+                cloud.position.z = -150;
+            }
+        });
+        
+        requestAnimationFrame(animateClouds);
+    }
+    
+    animateClouds();
+}
+
+// Fonction pour créer des oiseaux volants
+function createFlyingBirds() {
+    const birdsGroup = new THREE.Group();
+    
+    // Matériau pour les oiseaux (silhouettes simplement)
+    const birdMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000000
+    });
+    
+    // Forme simple d'oiseau
+    function createBird() {
+        const birdGroup = new THREE.Group();
+        
+        // Corps
+        const body = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 8, 8),
+            birdMaterial
+        );
+        birdGroup.add(body);
+        
+        // Ailes (simples plans triangulaires)
+        const wingGeometry = new THREE.BufferGeometry();
+        const vertices = new Float32Array([
+            0, 0, 0,
+            1, 0.2, 0,
+            0.8, 0, 0.2
+        ]);
+        wingGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        
+        const leftWing = new THREE.Mesh(wingGeometry, birdMaterial);
+        leftWing.position.set(-0.2, 0, 0);
+        birdGroup.add(leftWing);
+        
+        const rightWing = new THREE.Mesh(wingGeometry, birdMaterial);
+        rightWing.position.set(0.2, 0, 0);
+        rightWing.scale.x = -1;
+        birdGroup.add(rightWing);
+        
+        return birdGroup;
+    }
+    
+    // Créer un vol d'oiseaux
+    for (let i = 0; i < 15; i++) {
+        const bird = createBird();
+        
+        // Position dans une formation en V
+        const angle = (i % 2 === 0) ? (i / 15) * Math.PI * 0.2 : -(i / 15) * Math.PI * 0.2;
+        const distance = (i / 15) * 10;
+        
+        bird.position.set(
+            Math.sin(angle) * distance,
+            40 + Math.random() * 10,
+            -Math.cos(angle) * distance - 50
+        );
+        
+        // Rotation pour qu'ils "volent" dans la bonne direction
+        bird.rotation.y = angle;
+        
+        // Animation des ailes
+        bird.wingAngle = Math.random() * Math.PI;
+        bird.wingSpeed = 0.1 + Math.random() * 0.1;
+        
+        birdsGroup.add(bird);
+    }
+    
+    scene.add(birdsGroup);
+    
+    // Animation du vol
+    function animateBirds() {
+        birdsGroup.position.z += 0.1;
+        
+        if (birdsGroup.position.z > 100) {
+            birdsGroup.position.z = -200;
+        }
+        
+        birdsGroup.children.forEach(bird => {
+            bird.wingAngle += bird.wingSpeed;
+            
+            // Mouvement des ailes
+            if (bird.children[1] && bird.children[2]) {
+                bird.children[1].rotation.z = Math.sin(bird.wingAngle) * 0.3;
+                bird.children[2].rotation.z = -Math.sin(bird.wingAngle) * 0.3;
+            }
+        });
+        
+        requestAnimationFrame(animateBirds);
+    }
+    
+    animateBirds();
+}
+
+// Fonction pour créer les câbles de suspension
+function createSuspensionCables() {
+    // Matériau pour les câbles
+    const cableMaterial = new THREE.MeshPhongMaterial({
+        color: 0x444444,
+        shininess: 80
+    });
+    
+    // Groupe pour contenir tous les câbles
+    const cablesGroup = new THREE.Group();
+    
+    // Câbles principaux horizontaux (de chaque côté)
+    const leftMainCable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
+        cableMaterial
+    );
+    leftMainCable.rotation.z = Math.PI / 2;
+    leftMainCable.position.set(-13, 25, -50);
+    leftMainCable.castShadow = true;
+    cablesGroup.add(leftMainCable);
+    
+    const rightMainCable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
+        cableMaterial
+    );
+    rightMainCable.rotation.z = Math.PI / 2;
+    rightMainCable.position.set(13, 25, -50);
+    rightMainCable.castShadow = true;
+    cablesGroup.add(rightMainCable);
+    
+    // Câbles verticaux (qui relient le câble principal à la route)
+    for (let z = -150; z <= 40; z += 10) {
+        // Câble gauche
+        const leftCable = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
+            cableMaterial
+        );
+        leftCable.position.set(-13, 12.5, z);
+        leftCable.castShadow = true;
+        cablesGroup.add(leftCable);
+        
+        // Câble droit
+        const rightCable = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
+            cableMaterial
+        );
+        rightCable.position.set(13, 12.5, z);
+        rightCable.castShadow = true;
+        cablesGroup.add(rightCable);
+    }
+    
+    scene.add(cablesGroup);
+}
+
 // Create water surfaces
 function createWaterSurfaces() {
     const waterGeometry = new THREE.PlaneGeometry(150, 150); // Agrandi à 150x150 au lieu de 100x100
@@ -166,7 +522,7 @@ function createWaterSurfaces() {
     scene.add(waterRight);
 }
 
-// Fonction pour créer les rambardes de pont réalistes (comme sur l'image)
+// Fonction pour créer les rambardes de pont réalistes
 function createRealisticBridgeRailings(xPos, zPos) {
     // Groupe pour les rambardes
     const railingGroup = new THREE.Group();
@@ -183,9 +539,9 @@ function createRealisticBridgeRailings(xPos, zPos) {
         shininess: 80
     });
     
-    // Longueur totale des rambardes
-    const railingLength = 150;
-    const segmentLength = 10; // Distance entre les supports verticaux
+    // Longueur totale des rambardes - augmentée pour couvrir toute la route
+    const railingLength = 200; // Était 150
+    const segmentLength = 10;
     const numSegments = Math.floor(railingLength / segmentLength);
     
     // Base de la rambarde (barre horizontale du bas)
@@ -193,7 +549,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
         new THREE.BoxGeometry(0.5, 0.5, railingLength),
         railingMaterial
     );
-    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 40);
+    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 60); // Ajusté pour couvrir plus de longueur
     baseRail.castShadow = true;
     baseRail.receiveShadow = true;
     railingGroup.add(baseRail);
@@ -206,7 +562,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
             railingMaterial
         );
         
-        const postZ = zPos + i * segmentLength;
+        const postZ = zPos + i * segmentLength - 60;
         verticalPost.position.set(0, 1.5, postZ);
         verticalPost.castShadow = true;
         verticalPost.receiveShadow = true;
@@ -244,9 +600,6 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Positionner le groupe complet à l'emplacement x demandé
     railingGroup.position.x = xPos;
     
-    // Ajouter à la liste des segments de route pour qu'ils avancent ensemble
-    roadSegments.push(railingGroup);
-    
     // Ajouter le groupe à la scène
     scene.add(railingGroup);
     
@@ -255,27 +608,72 @@ function createRealisticBridgeRailings(xPos, zPos) {
 
 // Create road segments for scrolling effect
 function createRoadSegments() {
-    // Create multiple road segments for scrolling
-    const segmentLength = 25; // Plus long (était 20)
-    const numSegments = 8; // Plus de segments (était 6)
+    // Augmenter le nombre de segments pour éviter les trous
+    const segmentLength = 25;
+    const numSegments = 12; // Augmenté de 8 à 12 pour plus de couverture
+    const segmentOverlap = 0.5; // Légère superposition pour éviter les trous
     
+    // Texture de route
+    const roadTexture = createRoadTexture();
+    const roadMaterial = new THREE.MeshPhongMaterial({
+        map: roadTexture,
+        color: 0x444444, // Plus foncé, comme sur les images de référence
+        shininess: 30
+    });
+    
+    // Créer les segments avec léger chevauchement
     for (let i = 0; i < numSegments; i++) {
-        // Create road segment
-        const roadTexture = createRoadTexture();
-        const roadMaterial = new THREE.MeshPhongMaterial({
-            map: roadTexture,
-            color: 0xaaaaaa
-        });
-        
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(26, 0.5, segmentLength), // Route élargie (26 au lieu de 24)
+            new THREE.BoxGeometry(26, 0.5, segmentLength + segmentOverlap),
             roadMaterial
         );
         
-        segment.position.set(0, -0.25, -40 + (i - numSegments/2) * segmentLength); // Reculée à -40
-        segment.receiveShadow = true; // Reçoit les ombres des autres objets
+        segment.position.set(0, -0.25, -60 + (i - numSegments/2) * (segmentLength - segmentOverlap));
+        segment.receiveShadow = true;
         scene.add(segment);
         roadSegments.push(segment);
+    }
+    
+    // Ajouter des segments de transition pour assurer la continuité
+    const transitionSegment1 = new THREE.Mesh(
+        new THREE.BoxGeometry(26, 0.5, 10),
+        roadMaterial
+    );
+    transitionSegment1.position.set(0, -0.25, 20);
+    transitionSegment1.receiveShadow = true;
+    scene.add(transitionSegment1);
+    roadSegments.push(transitionSegment1);
+    
+    const transitionSegment2 = new THREE.Mesh(
+        new THREE.BoxGeometry(26, 0.5, 10),
+        roadMaterial
+    );
+    transitionSegment2.position.set(0, -0.25, -140);
+    transitionSegment2.receiveShadow = true;
+    scene.add(transitionSegment2);
+    roadSegments.push(transitionSegment2);
+}
+
+// Update road segments to avoid gaps
+function updateRoadSegments() {
+    // Scroll road segments for endless runner effect
+    for (let i = 0; i < roadSegments.length; i++) {
+        const segment = roadSegments[i];
+        segment.position.z += 0.2;
+        
+        // Si segment a dépassé la caméra, le replacer à l'arrière
+        // Valeur augmentée pour éviter les trous
+        if (segment.position.z > 40) {
+            // Calculer la position la plus reculée parmi tous les segments
+            let farthestZ = 100;
+            for (let j = 0; j < roadSegments.length; j++) {
+                if (roadSegments[j].position.z < farthestZ) {
+                    farthestZ = roadSegments[j].position.z;
+                }
+            }
+            // Placer le segment juste après le plus reculé
+            segment.position.z = farthestZ - segment.geometry.parameters.depth + 0.5;
+        }
     }
 }
 
@@ -347,7 +745,7 @@ function createMouseCursor() {
 
 // Create screen effects for bonus/malus
 function createScreenEffects() {
-    // White flash effect for bonuses - Beaucoup plus spectaculaire
+    // White flash effect for bonuses - vide, effet supprimé
     const flashGeometry = new THREE.PlaneGeometry(100, 100);
     const flashMaterial = new THREE.MeshBasicMaterial({
         color: 0xffffff,
@@ -377,101 +775,9 @@ function createScreenEffects() {
     scene.add(screenBorderEffect);
 }
 
-// Show white flash effect - Version améliorée et plus spectaculaire
+// Show white flash effect - supprimé
 function showFlashEffect() {
-    // Reset opacity
-    flashEffect.material.opacity = 0.9; // Plus lumineux
-    
-    // Effet de vague lumineuse
-    const flashParticleCount = 200;
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(flashParticleCount * 3);
-    const particleVelocities = [];
-    
-    // Créer une explosion de particules blanches
-    for (let i = 0; i < flashParticleCount; i++) {
-        const i3 = i * 3;
-        // Début au centre de l'écran
-        particlePositions[i3] = 0;
-        particlePositions[i3 + 1] = 0;
-        particlePositions[i3 + 2] = -5;
-        
-        // Vélocité dans toutes les directions
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 0.05 + Math.random() * 0.2;
-        particleVelocities.push({
-            x: Math.cos(angle) * speed,
-            y: Math.sin(angle) * speed,
-            z: 0
-        });
-    }
-    
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    
-    const particleMaterial = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.2,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending
-    });
-    
-    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
-    particleSystem.renderOrder = 1000;
-    scene.add(particleSystem);
-    
-    // Animation pour l'effet flash
-    const flashAnimation = {
-        life: 30, // Plus long
-        system: particleSystem,
-        geometry: particleGeometry,
-        velocities: particleVelocities,
-        update: function() {
-            // Animation du flash principal
-            if (this.life > 25) {
-                flashEffect.material.opacity = 0.9;
-            } else {
-                flashEffect.material.opacity *= 0.85;
-            }
-            
-            // Animation des particules
-            const positions = this.geometry.attributes.position.array;
-            
-            for (let i = 0; i < flashParticleCount; i++) {
-                const i3 = i * 3;
-                const vel = this.velocities[i];
-                
-                // Mettre à jour la position avec la vélocité
-                positions[i3] += vel.x;
-                positions[i3 + 1] += vel.y;
-                positions[i3 + 2] += vel.z;
-                
-                // Augmenter légèrement la vitesse pour un effet d'explosion
-                vel.x *= 1.05;
-                vel.y *= 1.05;
-            }
-            
-            this.geometry.attributes.position.needsUpdate = true;
-            
-            // Diminuer l'opacité des particules
-            this.system.material.opacity = this.life / 40;
-            
-            // Diminuer la durée de vie
-            this.life--;
-            
-            // Supprimer quand fini
-            if (this.life <= 0) {
-                scene.remove(this.system);
-                flashEffect.material.opacity = 0;
-                return false;
-            }
-            
-            return true;
-        }
-    };
-    
-    // Ajouter au tableau d'effets à mettre à jour
-    effectsToUpdate.push(flashAnimation);
+    // Ne rien faire - effet supprimé
 }
 
 // Show red border effect
@@ -919,10 +1225,11 @@ function updateTroops() {
     }
     
     // Create troops of each level in formation with better spacing
+    // Position reculée considérablement
     let xPos = -6;
-    let zPos = -8; // Reculé davantage (était -4)
-    const xSpacing = 2.5; // Plus d'espace entre les poulets (était 2.0)
-    const zSpacing = 2.5; // Plus d'espace entre les rangées (était 2.0)
+    let zPos = -12; // Reculé davantage (était -8)
+    const xSpacing = 2.5; 
+    const zSpacing = 2.5; 
     
     // Create highest level troops first (bigger ones in back)
     for (let level = 9; level >= 0; level--) {
@@ -945,7 +1252,7 @@ function updateTroops() {
     
     // If no troops were created, create at least one
     if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -8 }); // Reculé davantage
+        const troop = createTroopMesh(0, { x: 0, z: -12 }); // Reculé davantage
         troopMeshes.push(troop);
         player = troop;
     }
@@ -1345,8 +1652,8 @@ function animate(time) {
                 const col = i % 4;
                 
                 // Position offset from leader with more space
-                const offsetX = (col - 1.5) * 2.0; // Plus d'espace (2.0 au lieu de 1.5)
-                const offsetZ = -row * 2.0; // Plus d'espace (2.0 au lieu de 1.5)
+                const offsetX = (col - 1.5) * 2.5; // Plus d'espace (2.5 au lieu de 2.0)
+                const offsetZ = -row * 2.5; // Plus d'espace (2.5 au lieu de 2.0)
                 
                 // Target position
                 const targetX = player.position.x + offsetX;
@@ -1361,10 +1668,10 @@ function animate(time) {
                 
                 // Wing flapping for random chickens
                 if (troop.children[5]) { // Left wing
-                    troop.children[5].rotation.z = Math.sin(now * 10 + i) * 0.2;
+                    troop.children[5].rotation.z = Math.sin(now * 10 + i) * 0.2 - 0.3;
                 }
                 if (troop.children[6]) { // Right wing
-                    troop.children[6].rotation.z = -Math.sin(now * 10 + i) * 0.2;
+                    troop.children[6].rotation.z = -Math.sin(now * 10 + i) * 0.2 + 0.3;
                 }
             }
             
@@ -1373,10 +1680,10 @@ function animate(time) {
             
             // Wing flapping for leader
             if (player.children[5]) { // Left wing
-                player.children[5].rotation.z = Math.sin(now * 10) * 0.2;
+                player.children[5].rotation.z = Math.sin(now * 10) * 0.2 - 0.3;
             }
             if (player.children[6]) { // Right wing
-                player.children[6].rotation.z = -Math.sin(now * 10) * 0.2;
+                player.children[6].rotation.z = -Math.sin(now * 10) * 0.2 + 0.3;
             }
             
             // Animer les particules des poulets évolués
@@ -1442,15 +1749,11 @@ function animate(time) {
                 // Update troops visualization
                 updateTroops();
                 
-                // Add visual effect for entering portal
+                // Add visual effect for entering portal (conservé)
                 createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
                 
-                // Afficher l'effet de flash ou de bordure selon le type de multiplier
-                if (multiplier.positive) {
-                    showFlashEffect(); // Flash blanc pour bonus
-                } else {
-                    showBorderEffect(); // Bordure rouge pour malus
-                }
+                // Suppression des effets de flash
+                // Plus d'appel à showFlashEffect() ou showBorderEffect()
                 
                 // Remove multiplier
                 scene.remove(multiplier.mesh);
@@ -1472,16 +1775,8 @@ function animate(time) {
             mouseCursor.rotation.z += 0.01;
         }
         
-        // Scroll road segments for endless runner effect
-        for (let i = 0; i < roadSegments.length; i++) {
-            const segment = roadSegments[i];
-            segment.position.z += 0.2;
-            
-            // If segment has moved past the camera, move it to the back
-            if (segment.position.z > 30) {
-                segment.position.z -= roadSegments.length * 25; // Ajusté pour segments plus longs (25)
-            }
-        }
+        // Update road segments - Nouvelle fonction
+        updateRoadSegments();
         
         // Add water animation
         if (waterLeft && waterRight) {
