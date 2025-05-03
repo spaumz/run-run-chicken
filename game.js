@@ -606,8 +606,11 @@ function createRealisticBridgeRailings(xPos, zPos) {
         specular: 0x666666
     });
     
-    // Longueur totale des rambardes - augmentée pour couvrir toute la route
-    const railingLength = 250; // Augmentée pour éviter les discontinuités
+    // IMPORTANT: Utiliser le même système de longueur que les pylônes
+    const pylonSpacing = 60; // Même valeur que pour les pylônes
+    const numPylons = 4;     // Même valeur que pour les pylônes
+    const railingLength = pylonSpacing * numPylons; // Calculer la longueur exactement comme les pylônes
+    
     const segmentLength = 10;
     const numSegments = Math.floor(railingLength / segmentLength);
     
@@ -667,10 +670,11 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Positionner le groupe complet à l'emplacement x demandé
     railingGroup.position.x = xPos;
     
-    // Stocker la position initiale pour l'animation fluide
+    // IMPORTANT: Stocker les mêmes données que les pylônes
     railingGroup.userData = { 
         initialZ: zPos,
-        totalLength: railingLength
+        pylonSpacing: pylonSpacing,
+        totalLength: pylonSpacing * numPylons
     };
     
     // Ajouter à la liste des éléments du pont
@@ -680,6 +684,134 @@ function createRealisticBridgeRailings(xPos, zPos) {
     scene.add(railingGroup);
     
     return railingGroup;
+}
+
+// Fonction pour créer les câbles de suspension
+function createSuspensionCables() {
+    // IMPORTANT: Utiliser les mêmes valeurs que les pylônes
+    const pylonSpacing = 60; // Même valeur que pour les pylônes
+    const numPylons = 4;     // Même valeur que pour les pylônes
+    const totalLength = pylonSpacing * numPylons;
+    
+    // Matériau pour les câbles - plus brillant et avec un effet spéculaire
+    const cableMaterial = new THREE.MeshPhongMaterial({
+        color: 0xDD2222,
+        shininess: 100,
+        specular: 0x999999
+    });
+    
+    // Groupe pour contenir tous les câbles
+    const cablesGroup = new THREE.Group();
+    
+    // Câbles principaux horizontaux - exactement comme la longueur du pont
+    const leftMainCable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, totalLength, 12),
+        cableMaterial
+    );
+    leftMainCable.rotation.z = Math.PI / 2;
+    leftMainCable.position.set(-15, 25, -120 + totalLength/2); // Position centrée sur le pont
+    leftMainCable.castShadow = true;
+    cablesGroup.add(leftMainCable);
+    
+    const rightMainCable = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.5, totalLength, 12),
+        cableMaterial
+    );
+    rightMainCable.rotation.z = Math.PI / 2;
+    rightMainCable.position.set(15, 25, -120 + totalLength/2); // Position centrée sur le pont
+    rightMainCable.castShadow = true;
+    cablesGroup.add(rightMainCable);
+    
+    // Câbles verticaux - placés exactement aux mêmes intervalles que les pylônes
+    for (let i = 0; i < numPylons; i++) {
+        const pylonZ = -200 + (i * pylonSpacing);
+        
+        // Câbles régulièrement espacés autour de chaque pylône
+        for (let j = -2; j <= 2; j++) {
+            const offset = j * 10;
+            
+            // Câble gauche
+            const leftCable = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.15, 0.15, 25, 6),
+                cableMaterial
+            );
+            leftCable.position.set(-15, 12.5, pylonZ + offset);
+            leftCable.castShadow = true;
+            cablesGroup.add(leftCable);
+            
+            // Câble droit
+            const rightCable = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.15, 0.15, 25, 6),
+                cableMaterial
+            );
+            rightCable.position.set(15, 12.5, pylonZ + offset);
+            rightCable.castShadow = true;
+            cablesGroup.add(rightCable);
+        }
+    }
+    
+    // IMPORTANT: Stocker les mêmes données que les pylônes
+    cablesGroup.userData = { 
+        initialZ: -200, // Même position de départ que les pylônes
+        pylonSpacing: pylonSpacing,
+        totalLength: totalLength
+    };
+    
+    // Ajouter aux éléments du pont
+    scene.add(cablesGroup);
+    bridgeElements.push(cablesGroup);
+    
+    return cablesGroup;
+}
+
+// Modification de updateRoadSegments pour assurer un déplacement cohérent
+function updateRoadSegments() {
+    if (gamePaused) return;
+    
+    // Vitesse de déplacement commune - identique pour tous les éléments
+    const moveSpeed = 0.15;
+    
+    // Calculer la longueur totale des segments de route
+    const totalRoadLength = roadSegments[0].userData.segmentLength * (roadSegments.length - 2);
+    
+    // Déplacer tous les segments de route ensemble
+    for (let i = 0; i < roadSegments.length; i++) {
+        const segment = roadSegments[i];
+        
+        // Avancer le segment
+        segment.position.z += moveSpeed;
+        
+        // Si le segment est trop avancé, le replacer exactement à l'arrière
+        if (segment.position.z > 50) {
+            segment.position.z -= totalRoadLength;
+        }
+    }
+    
+    // Déplacer également les éléments du pont avec la même logique pour tous
+    for (let i = 0; i < bridgeElements.length; i++) {
+        const element = bridgeElements[i];
+        
+        // Avancer l'élément du pont
+        element.position.z += moveSpeed;
+        
+        // Utiliser la même méthode de recyclage pour tous les éléments du pont
+        // S'assurer que tous les éléments utilisent totalLength comme les pylônes
+        if (element.userData && element.userData.pylonSpacing) {
+            const pylonSpacing = element.userData.pylonSpacing;
+            const numPylons = 4; // Nombre fixe de pylônes
+            const totalLength = pylonSpacing * numPylons;
+            
+            if (element.position.z > 50) {
+                // Replacer l'élément à l'arrière
+                element.position.z -= totalLength;
+            }
+        } else {
+            // Cas de secours pour les éléments sans données spécifiques
+            if (element.position.z > 50) {
+                element.position.z -= totalRoadLength;
+            }
+        }
+    }
 }
 
 // Fonction pour créer une texture de route
