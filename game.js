@@ -649,34 +649,38 @@ function createRealisticBridgeRailings(xPos, zPos) {
 // Fonction pour créer une texture de route
 function createRoadTexture() {
     const canvas = document.createElement('canvas');
-    // Augmenter la résolution de la texture
-    canvas.width = 1024;  // Doublé
-    canvas.height = 1024; // Doublé
+    canvas.width = 1024;
+    canvas.height = 1024;
     const ctx = canvas.getContext('2d');
     
-    // Fond gris foncé pour l'asphalte
-    ctx.fillStyle = '#444444';
+    // Fond noir/gris foncé pour l'asphalte (comme dans votre exemple)
+    ctx.fillStyle = '#333333';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Lignes blanches au milieu beaucoup plus larges
+    // Lignes blanches pointillées au milieu (comme dans votre exemple)
     ctx.fillStyle = '#ffffff';
-    const dashLength = 60;  // Doublé
-    const dashGap = 40;     // Doublé
+    const dashLength = 80;
+    const dashGap = 50;
+    
+    // Ligne du milieu pointillée
     for (let y = 0; y < canvas.height; y += dashLength + dashGap) {
-        // Ligne centrale plus large (20px au lieu de 10px)
-        ctx.fillRect(canvas.width / 2 - 10, y, 20, dashLength);
+        // Ligne centrale plus large (15px)
+        ctx.fillRect(canvas.width / 2 - 7.5, y, 15, dashLength);
     }
     
-    // Lignes de côté continues plus larges
-    ctx.fillRect(40, 0, 10, canvas.height);  // 10px de large au lieu de 5px
-    ctx.fillRect(canvas.width - 50, 0, 10, canvas.height);  // 10px de large au lieu de 5px
+    // Lignes de côté continues
+    const sideLineWidth = 15;
+    // Ligne gauche continue
+    ctx.fillRect(sideLineWidth * 2, 0, sideLineWidth, canvas.height);
+    // Ligne droite continue
+    ctx.fillRect(canvas.width - sideLineWidth * 3, 0, sideLineWidth, canvas.height);
     
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(1, 10);
     
-    // Désactiver le filtrage pour des lignes plus nettes
+    // Important: désactiver le filtrage pour des lignes nettes
     texture.minFilter = THREE.NearestFilter;
     texture.magFilter = THREE.NearestFilter;
     
