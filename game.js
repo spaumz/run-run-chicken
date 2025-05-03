@@ -15,6 +15,8 @@ let targetPlayerX = 0;
 let timeElapsed = 0;
 let multiplierSpawnRate = 2;
 let lastSpawnTime = 0;
+let lastBarrelSpawnTime = 0;
+let barrelSpawnRate = 3; // Temps en secondes entre les apparitions de tonneaux
 let mouseCursor;
 let roadSegments = [];
 let waterLeft, waterRight;
@@ -22,6 +24,10 @@ let effectsToUpdate = [];
 let flashEffect; // Pour l'effet de flash
 let screenBorderEffect; // Pour le contour rouge
 let bridgeElements = []; // Tableau pour stocker tous les éléments de pont
+let barrels = []; // Tableau pour stocker les tonneaux
+let eggs = []; // Tableau pour stocker les œufs tirés
+let lastShootTime = 0;
+let shootCooldown = 0.5; // Temps en secondes entre les tirs
 
 // Max troop visualization
 const MAX_TROOPS_DISPLAYED = 30;
@@ -59,6 +65,7 @@ const finalFusionRate = document.getElementById("final-fusion-rate");
 startButton.addEventListener("click", startGame);
 restartButton.addEventListener("click", restartGame);
 window.addEventListener("keydown", handleKeyDown);
+gameContainer.addEventListener("click", shootEgg); // Ajout d'un événement pour tirer des œufs
 
 // Initialize Three.js
 function init() {
@@ -112,8 +119,8 @@ function init() {
     // Create water surfaces
     createWaterSurfaces();
     
-    // Create road segments (instead of a single bridge)
-    createRoadSegments();
+    // Create continuous road (système amélioré)
+    createContinuousRoad();
     
     // Create rails - Route élargie et bordure saumon/corail
     const railMaterial = new THREE.MeshPhongMaterial({ 
@@ -122,17 +129,8 @@ function init() {
     });
     
     // Création de rambardes de pont réalistes sur les côtés
-    createRealisticBridgeRailings(-15, -40); // Élargi à -15 au lieu de -13
-    createRealisticBridgeRailings(15, -40);  // Élargi à 15 au lieu de 13
-    
-    // Après la création des éléments du pont, enregistrer leurs positions initiales
-    for (let i = 0; i < bridgeElements.length; i++) {
-        const element = bridgeElements[i];
-        if (!element.userData) {
-            element.userData = {};
-        }
-        element.userData.initialZ = element.position.z;
-    }
+    createRealisticBridgeRailings(-15, 0); // Élargi à -15 au lieu de -13
+    createRealisticBridgeRailings(15, 0);  // Élargi à 15 au lieu de 13
     
     // Create mouse cursor
     createMouseCursor();
@@ -287,11 +285,6 @@ function createBridgePylons() {
     
     const pylon3 = createPylon(20);
     scene.add(pylon3);
-    
-    // Stocker les positions initiales pour l'animation fluide
-    pylon1.userData = { initialZ: -60 };
-    pylon2.userData = { initialZ: -120 };
-    pylon3.userData = { initialZ: 20 };
     
     // Ajouter les pylônes au tableau des éléments du pont
     bridgeElements.push(pylon1);
@@ -515,9 +508,6 @@ function createSuspensionCables() {
     
     scene.add(cablesGroup);
     
-    // Stocker la position initiale
-    cablesGroup.userData = { initialZ: -50 };
-    
     // Ajouter le groupe de câbles au tableau des éléments du pont
     bridgeElements.push(cablesGroup);
 }
@@ -575,7 +565,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
         new THREE.BoxGeometry(0.5, 0.5, railingLength),
         railingMaterial
     );
-    baseRail.position.set(0, 0.75, zPos + railingLength/2 - 60); // Ajusté pour couvrir plus de longueur
+    baseRail.position.set(0, 0.75, zPos - railingLength/2 + 60); // Position ajustée
     baseRail.castShadow = true;
     baseRail.receiveShadow = true;
     railingGroup.add(baseRail);
@@ -588,7 +578,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
             railingMaterial
         );
         
-        const postZ = zPos + i * segmentLength - 60;
+        const postZ = zPos - railingLength/2 + 60 + i * segmentLength;
         verticalPost.position.set(0, 1.5, postZ);
         verticalPost.castShadow = true;
         verticalPost.receiveShadow = true;
@@ -626,10 +616,7 @@ function createRealisticBridgeRailings(xPos, zPos) {
     // Positionner le groupe complet à l'emplacement x demandé
     railingGroup.position.x = xPos;
     
-    // Stocker la position initiale pour l'animation fluide
-    railingGroup.userData = { initialZ: zPos };
-    
-    // Ajouter à la liste des éléments du pont au lieu de roadSegments
+    // Ajouter à la liste des éléments du pont
     bridgeElements.push(railingGroup);
     
     // Ajouter le groupe à la scène
@@ -638,69 +625,56 @@ function createRealisticBridgeRailings(xPos, zPos) {
     return railingGroup;
 }
 
-// Create road segments for scrolling effect
-function createRoadSegments() {
-    // Augmenter le nombre de segments pour éviter les trous
-    const segmentLength = 25;
-    const numSegments = 16; // Augmenté de 12 à 16 pour plus de couverture
-    const segmentOverlap = 1.0; // Augmenté de 0.5 à 1.0 pour plus de chevauchement
-    
-    // Texture de route
+// Fonction améliorée pour créer une route continue sans sauts
+function createContinuousRoad() {
+    // Texture de route avec les nouvelles couleurs demandées
     const roadTexture = createRoadTexture();
     const roadMaterial = new THREE.MeshPhongMaterial({
         map: roadTexture,
-        color: 0x333333, // Gris plus foncé pour la route
+        color: 0xAEADB2, // Nouvelle couleur demandée pour la route
         shininess: 20
     });
     
-    // Créer les segments avec léger chevauchement - PLUS LARGES
+    // Créer une seule longue route en continu
+    const roadLength = 1000; // Route très longue
+    const visibleRoadLength = 200; // Portion visible de la route
+    const roadSegmentLength = 25; // Longueur d'un segment de route
+    const numSegments = Math.ceil(visibleRoadLength / roadSegmentLength) + 2; // +2 pour avoir de la marge
+
+    // Création des segments pour la première fois
     for (let i = 0; i < numSegments; i++) {
         const segment = new THREE.Mesh(
-            new THREE.BoxGeometry(30, 0.5, segmentLength + segmentOverlap), // Élargi à 30 au lieu de 26
+            new THREE.BoxGeometry(30, 0.5, roadSegmentLength),
             roadMaterial
         );
         
-        segment.position.set(0, -0.25, -60 + (i - numSegments/2) * (segmentLength - segmentOverlap));
+        // Position initiale des segments
+        segment.position.set(0, -0.25, -visibleRoadLength/2 + i * roadSegmentLength);
         segment.receiveShadow = true;
         scene.add(segment);
+        
+        // Stockage pour le recyclage
+        segment.originalIndex = i;
         roadSegments.push(segment);
     }
-    
-    // Ajouter des segments de transition pour assurer la continuité - PLUS LARGES
-    const transitionSegment1 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment1.position.set(0, -0.25, 25); // Légèrement plus loin
-    transitionSegment1.receiveShadow = true;
-    scene.add(transitionSegment1);
-    roadSegments.push(transitionSegment1);
-    
-    const transitionSegment2 = new THREE.Mesh(
-        new THREE.BoxGeometry(30, 0.5, 15), // Plus long (10 → 15)
-        roadMaterial
-    );
-    transitionSegment2.position.set(0, -0.25, -150); // Plus loin en arrière
-    transitionSegment2.receiveShadow = true;
-    scene.add(transitionSegment2);
-    roadSegments.push(transitionSegment2);
 }
 
-// Update road segments to avoid gaps
+// Fonction améliorée pour l'animation fluide de la route
 function updateRoadSegments() {
     // Vitesse de déplacement commune
     const moveSpeed = 0.2;
     
-    // Scroll road segments for endless runner effect
+    // Faire avancer tous les segments de route
     for (let i = 0; i < roadSegments.length; i++) {
         const segment = roadSegments[i];
         segment.position.z += moveSpeed;
         
-        // Si segment a dépassé la caméra, le replacer à l'arrière
+        // Si le segment est complètement passé devant la caméra
         if (segment.position.z > 40) {
-            // Identifier le segment le plus en arrière
+            // Trouver le segment le plus en arrière
             let farthestZ = 100;
             let farthestIndex = -1;
+            
             for (let j = 0; j < roadSegments.length; j++) {
                 if (roadSegments[j].position.z < farthestZ) {
                     farthestZ = roadSegments[j].position.z;
@@ -708,31 +682,44 @@ function updateRoadSegments() {
                 }
             }
             
-            // Placer le segment juste après le plus reculé avec un peu de chevauchement
-            const depth = segment.geometry.parameters.depth;
-            segment.position.z = farthestZ - depth + 1.0; // Chevauchement de 1.0 unité
+            // Calculer la nouvelle position pour un placement continu
+            const segmentLength = segment.geometry.parameters.depth;
+            const newZ = roadSegments[farthestIndex].position.z - segmentLength;
+            
+            // Positionner ce segment juste derrière le plus éloigné
+            segment.position.z = newZ;
         }
     }
-    
-    // Animation fluide des éléments du pont
-    const bridgeLength = 200; // Longueur totale du trajet du pont
-    
-    // Faire avancer tous les éléments du pont
+
+    // Appliquer la même technique pour les éléments du pont
     for (let i = 0; i < bridgeElements.length; i++) {
         const element = bridgeElements[i];
-        
-        // Position initiale de l'élément
-        const initialZ = element.userData?.initialZ || 0;
-        
-        // Avancer l'élément
         element.position.z += moveSpeed;
         
-        // Si l'élément a dépassé la caméra, le repositionner de manière fluide
-        if (element.position.z > 80) {
-            // Au lieu de le repositionner brutalement, calculer le décalage exact
-            // pour qu'il se retrouve exactement une longueur bridgeLength en arrière
-            const offset = Math.ceil((element.position.z - initialZ) / bridgeLength) * bridgeLength;
-            element.position.z -= offset;
+        // Si l'élément est passé devant la caméra
+        if (element.position.z > 100) {
+            // Chercher l'élément le plus en arrière du même type
+            let farthestZ = 100;
+            let farthestSameTypeIndex = -1;
+            
+            for (let j = 0; j < bridgeElements.length; j++) {
+                if (bridgeElements[j].constructor === element.constructor && 
+                    bridgeElements[j].position.z < farthestZ) {
+                    farthestZ = bridgeElements[j].position.z;
+                    farthestSameTypeIndex = j;
+                }
+            }
+            
+            // Si on trouve un élément similaire, placer cet élément derrière
+            if (farthestSameTypeIndex !== -1) {
+                // Estimer la "taille" de l'élément pour un placement continu
+                const estimatedDepth = 20; // Estimation de la profondeur d'un élément du pont
+                const newZ = bridgeElements[farthestSameTypeIndex].position.z - estimatedDepth - 50;
+                element.position.z = newZ;
+            } else {
+                // Sinon repositionner loin en arrière
+                element.position.z = -200;
+            }
         }
     }
 }
@@ -744,14 +731,14 @@ function createRoadTexture() {
     canvas.height = 512;
     const ctx = canvas.getContext("2d");
     
-    // Road background
-    ctx.fillStyle = "#333333"; // Gris foncé
+    // Road background avec la nouvelle couleur demandée
+    ctx.fillStyle = "#AEADB2"; // Nouvelle couleur grise pour la route
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Lane markings (3 lanes) avec marquages plus longs
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 8; // Ligne plus épaisse (était 5)
-    ctx.setLineDash([40, 20]); // Marquages plus longs (était [20, 20])
+    ctx.strokeStyle = "#DCE7DF"; // Nouvelle couleur demandée pour les traits
+    ctx.lineWidth = 8; // Ligne plus épaisse
+    ctx.setLineDash([40, 20]); // Marquages plus longs
     
     // Left lane divider
     ctx.beginPath();
@@ -835,11 +822,6 @@ function createScreenEffects() {
     scene.add(screenBorderEffect);
 }
 
-// Show white flash effect - supprimé
-function showFlashEffect() {
-    // Ne rien faire - effet supprimé
-}
-
 // Show red border effect
 function showBorderEffect() {
     // Reset opacity
@@ -869,7 +851,436 @@ function showBorderEffect() {
     effectsToUpdate.push(borderAnimation);
 }
 
-// Create a chicken based on level with more realistic model - Version corrigée
+// Fonction pour créer un tonneau avec des PV
+function createBarrel() {
+    // Groupe pour le tonneau
+    const barrelGroup = new THREE.Group();
+    
+    // Matériaux pour le tonneau
+    const woodMaterial = new THREE.MeshPhongMaterial({
+        color: 0x8B4513, // Brun bois
+        shininess: 40
+    });
+    
+    const metalMaterial = new THREE.MeshPhongMaterial({
+        color: 0x888888, // Gris métallique
+        shininess: 80
+    });
+    
+    // Corps du tonneau
+    const barrelBody = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.8, 0.8, 1.6, 16),
+        woodMaterial
+    );
+    barrelBody.rotation.x = Math.PI / 2; // Rotation pour que le tonneau soit horizontal
+    barrelBody.castShadow = true;
+    barrelGroup.add(barrelBody);
+    
+    // Anneaux métalliques du tonneau
+    const ringPositions = [-0.6, -0.2, 0.2, 0.6]; // Positions pour les anneaux
+    
+    for (let pos of ringPositions) {
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.81, 0.1, 8, 16),
+            metalMaterial
+        );
+        ring.position.z = pos;
+        ring.rotation.x = Math.PI / 2;
+        ring.castShadow = true;
+        barrelGroup.add(ring);
+    }
+    
+    // Définir une position aléatoire sur la route
+    const lane = Math.floor(Math.random() * 3) - 1; // -1, 0, ou 1
+    const xPos = lane * 8; // Positionner dans une des trois voies
+    
+    barrelGroup.position.set(xPos, 0.8, -120); // Positionner loin derrière
+    
+    // Ajouter des propriétés pour le gameplay
+    barrelGroup.userData = {
+        health: 3, // Points de vie
+        speed: 0.3 + Math.random() * 0.2, // Vitesse aléatoire
+        rotationSpeed: 0.05 + Math.random() * 0.05 // Vitesse de rotation
+    };
+    
+    // Ajouter un texte pour afficher les PV
+    const healthDisplay = createHealthDisplay(barrelGroup.userData.health);
+    healthDisplay.position.y = 1.5;
+    barrelGroup.add(healthDisplay);
+    barrelGroup.userData.healthDisplay = healthDisplay;
+    
+    scene.add(barrelGroup);
+    barrels.push(barrelGroup);
+    
+    return barrelGroup;
+}
+
+// Créer un affichage des PV au-dessus du tonneau
+function createHealthDisplay(health) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    
+    // Fond transparent
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Texte des PV
+    ctx.fillStyle = "#ff0000";
+    ctx.font = "bold 40px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(health.toString(), canvas.width/2, canvas.height/2);
+    
+    // Créer une texture et un matériau
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide
+    });
+    
+    // Créer le plan d'affichage
+    const plane = new THREE.Mesh(
+        new THREE.PlaneGeometry(1, 0.5),
+        material
+    );
+    
+    return plane;
+}
+
+// Fonction pour mettre à jour l'affichage des PV
+function updateHealthDisplay(barrel) {
+    const health = barrel.userData.health;
+    const healthDisplay = barrel.userData.healthDisplay;
+    
+    if (!healthDisplay) return;
+    
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    
+    // Fond transparent
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Texte des PV avec couleur basée sur la vie restante
+    const color = health > 2 ? "#00ff00" : health > 1 ? "#ffff00" : "#ff0000";
+    ctx.fillStyle = color;
+    ctx.font = "bold 40px Arial";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(health.toString(), canvas.width/2, canvas.height/2);
+    
+    // Mettre à jour la texture
+    const texture = new THREE.CanvasTexture(canvas);
+    healthDisplay.material.map.dispose();
+    healthDisplay.material.map = texture;
+    healthDisplay.material.needsUpdate = true;
+}
+
+// Fonction pour créer un œuf tiré par un poulet
+function createEgg(position) {
+    // Géométrie et matériau pour l'œuf
+    const eggGeometry = new THREE.SphereGeometry(0.25, 16, 16);
+    eggGeometry.scale(1, 1.3, 1); // Légèrement étiré pour forme d'œuf
+    
+    const eggMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xffffff, 
+        shininess: 90 
+    });
+    
+    const egg = new THREE.Mesh(eggGeometry, eggMaterial);
+    egg.position.copy(position);
+    egg.position.y += 0.5; // Ajuster la hauteur
+    egg.position.z -= 1; // Devant le poulet
+    egg.castShadow = true;
+    
+    // Propriétés de l'œuf
+    egg.userData = {
+        speed: 0.8, // Vitesse de l'œuf
+        damage: 1 // Dégâts infligés
+    };
+    
+    scene.add(egg);
+    eggs.push(egg);
+    
+    return egg;
+}
+
+// Fonction pour tirer un œuf depuis le poulet leader
+function shootEgg() {
+    if (!gameStarted || gameOver || gamePaused || !player) return;
+    
+    // Vérifier si le cooldown est terminé
+    const currentTime = Date.now() / 1000;
+    if (currentTime - lastShootTime < shootCooldown) return;
+    
+    // Mettre à jour le temps du dernier tir
+    lastShootTime = currentTime;
+    
+    // Créer l'œuf à la position du leader
+    createEgg(player.position.clone());
+    
+    // Jouer un son (à implémenter)
+    // playSound('shoot');
+}
+
+// Fonction pour créer une explosion de sang
+function createBloodExplosion(position) {
+    // Groupe pour contenir l'explosion
+    const explosionGroup = new THREE.Group();
+    explosionGroup.position.copy(position);
+    
+    // Matériau pour le sang
+    const bloodMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    // Créer des gouttelettes de sang
+    const dropletCount = 30;
+    const droplets = [];
+    
+    for (let i = 0; i < dropletCount; i++) {
+        const size = 0.05 + Math.random() * 0.15;
+        const droplet = new THREE.Mesh(
+            new THREE.SphereGeometry(size, 8, 8),
+            bloodMaterial
+        );
+        
+        // Position aléatoire autour du centre
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 0.2;
+        droplet.position.set(
+            Math.cos(angle) * radius,
+            Math.sin(angle) * radius,
+            Math.random() * 0.2 - 0.1
+        );
+        
+        // Vélocité aléatoire pour l'animation
+        droplet.userData = {
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.2,
+                Math.random() * 0.15,
+                (Math.random() - 0.5) * 0.2
+            ),
+            gravity: 0.005,
+            life: 30 + Math.floor(Math.random() * 20)
+        };
+        
+        explosionGroup.add(droplet);
+        droplets.push(droplet);
+    }
+    
+    scene.add(explosionGroup);
+    
+    // Animation de l'explosion
+    const bloodAnimation = {
+        group: explosionGroup,
+        droplets: droplets,
+        life: 50, // Durée de vie de l'explosion
+        update: function() {
+            // Animer chaque gouttelette
+            for (let droplet of this.droplets) {
+                // Appliquer la vélocité
+                droplet.position.x += droplet.userData.velocity.x;
+                droplet.position.y += droplet.userData.velocity.y;
+                droplet.position.z += droplet.userData.velocity.z;
+                
+                // Appliquer la gravité
+                droplet.userData.velocity.y -= droplet.userData.gravity;
+                
+                // Réduire la vie et l'opacité
+                droplet.userData.life--;
+                if (droplet.userData.life <= 0) {
+                    droplet.visible = false;
+                } else {
+                    droplet.material.opacity = droplet.userData.life / 50;
+                }
+            }
+            
+            // Réduire la vie de l'explosion
+            this.life--;
+            
+            // Retirer l'explosion quand terminée
+            if (this.life <= 0) {
+                scene.remove(this.group);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(bloodAnimation);
+    return bloodAnimation;
+}
+
+// Fonction pour créer une explosion du tonneau
+function createBarrelExplosion(position) {
+    // Groupe pour contenir l'explosion
+    const explosionGroup = new THREE.Group();
+    explosionGroup.position.copy(position);
+    
+    // Matériaux pour les débris
+    const woodMaterial = new THREE.MeshPhongMaterial({
+        color: 0x8B4513,
+        transparent: true,
+        opacity: 1
+    });
+    
+    const metalMaterial = new THREE.MeshPhongMaterial({
+        color: 0x888888,
+        transparent: true,
+        opacity: 1
+    });
+    
+    // Créer des débris de bois
+    const debrisCount = 20;
+    const debris = [];
+    
+    for (let i = 0; i < debrisCount; i++) {
+        // Alterner entre débris de bois et métal
+        const material = i % 5 === 0 ? metalMaterial : woodMaterial;
+        const size = 0.1 + Math.random() * 0.2;
+        
+        // Formes variées pour les débris
+        let debrisGeometry;
+        const shapeType = Math.floor(Math.random() * 3);
+        
+        if (shapeType === 0) {
+            debrisGeometry = new THREE.BoxGeometry(size, size, size);
+        } else if (shapeType === 1) {
+            debrisGeometry = new THREE.SphereGeometry(size, 4, 4);
+        } else {
+            debrisGeometry = new THREE.ConeGeometry(size, size * 2, 4);
+        }
+        
+        const debrisPiece = new THREE.Mesh(debrisGeometry, material);
+        
+        // Position aléatoire autour du centre
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 0.5;
+        debrisPiece.position.set(
+            Math.cos(angle) * radius,
+            Math.sin(angle) * radius,
+            Math.random() * 0.5 - 0.25
+        );
+        
+        // Rotation aléatoire
+        debrisPiece.rotation.set(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+        );
+        
+        // Vélocité aléatoire pour l'animation
+        debrisPiece.userData = {
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.3,
+                Math.random() * 0.2,
+                (Math.random() - 0.5) * 0.3
+            ),
+            rotationSpeed: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.1,
+                (Math.random() - 0.5) * 0.1,
+                (Math.random() - 0.5) * 0.1
+            ),
+            gravity: 0.007,
+            life: 40 + Math.floor(Math.random() * 30)
+        };
+        
+        explosionGroup.add(debrisPiece);
+        debris.push(debrisPiece);
+    }
+    
+    scene.add(explosionGroup);
+    
+    // Animation de l'explosion
+    const explosionAnimation = {
+        group: explosionGroup,
+        debris: debris,
+        life: 60, // Durée de vie de l'explosion
+        update: function() {
+            // Animer chaque débris
+            for (let debrisPiece of this.debris) {
+                // Appliquer la vélocité
+                debrisPiece.position.x += debrisPiece.userData.velocity.x;
+                debrisPiece.position.y += debrisPiece.userData.velocity.y;
+                debrisPiece.position.z += debrisPiece.userData.velocity.z;
+                
+                // Appliquer la rotation
+                debrisPiece.rotation.x += debrisPiece.userData.rotationSpeed.x;
+                debrisPiece.rotation.y += debrisPiece.userData.rotationSpeed.y;
+                debrisPiece.rotation.z += debrisPiece.userData.rotationSpeed.z;
+                
+                // Appliquer la gravité
+                debrisPiece.userData.velocity.y -= debrisPiece.userData.gravity;
+                
+                // Réduire la vie et l'opacité
+                debrisPiece.userData.life--;
+                if (debrisPiece.userData.life <= 0) {
+                    debrisPiece.visible = false;
+                } else {
+                    debrisPiece.material.opacity = debrisPiece.userData.life / 60;
+                }
+            }
+            
+            // Réduire la vie de l'explosion
+            this.life--;
+            
+            // Retirer l'explosion quand terminée
+            if (this.life <= 0) {
+                scene.remove(this.group);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(explosionAnimation);
+    
+    // Ajouter un effet de flash lumineux au centre de l'explosion
+    const flashGeometry = new THREE.SphereGeometry(1, 16, 16);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff9933,
+        transparent: true,
+        opacity: 1,
+        blending: THREE.AdditiveBlending
+    });
+    
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    explosionGroup.add(flash);
+    
+    // Animation pour le flash
+    const flashAnimation = {
+        mesh: flash,
+        life: 10,
+        scale: 0.1,
+        update: function() {
+            this.mesh.scale.set(this.scale, this.scale, this.scale);
+            this.scale += 0.2;
+            this.life--;
+            this.mesh.material.opacity = this.life / 10;
+            
+            if (this.life <= 0) {
+                explosionGroup.remove(this.mesh);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(flashAnimation);
+    
+    return explosionAnimation;
+}
+
+// Create a chicken based on level with more realistic model
 function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     const troopGroup = new THREE.Group();
     
@@ -1009,7 +1420,7 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     rightEyeHighlight.position.set(0.145 * sizeMultiplier, 0.91 * sizeMultiplier, 0.49 * sizeMultiplier);
     troopGroup.add(rightEyeHighlight);
     
-    // Ailes simples mais visibles et fonctionnelles (corrigé)
+    // Ailes simples mais visibles et fonctionnelles
     const wingGeometry = new THREE.BoxGeometry(
         0.3 * sizeMultiplier,
         0.5 * sizeMultiplier,
@@ -1227,639 +1638,3 @@ function createTroopMesh(level = 0, position = { x: 0, z: 0 }) {
     
     return troopGroup;
 }
-
-// Update troops visualization with better spacing
-function updateTroops() {
-    // Remove all existing troops
-    for (let i = 0; i < troopMeshes.length; i++) {
-        scene.remove(troopMeshes[i]);
-    }
-    troopMeshes = [];
-    
-    // Reset player
-    player = null;
-    
-    // Count how many troops of each level we need
-    let remainingTroops = troops;
-    let troopCounts = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]; // Level 1-10
-    
-    // Calculate troop distribution using fusion rate
-    while (remainingTroops > 0) {
-        if (remainingTroops >= 500 * fusionRate) {
-            troopCounts[9]++;
-            remainingTroops -= 500 * fusionRate;
-        } else if (remainingTroops >= 300 * fusionRate) {
-            troopCounts[8]++;
-            remainingTroops -= 300 * fusionRate;
-        } else if (remainingTroops >= 200 * fusionRate) {
-            troopCounts[7]++;
-            remainingTroops -= 200 * fusionRate;
-        } else if (remainingTroops >= 150 * fusionRate) {
-            troopCounts[6]++;
-            remainingTroops -= 150 * fusionRate;
-        } else if (remainingTroops >= 100 * fusionRate) {
-            troopCounts[5]++;
-            remainingTroops -= 100 * fusionRate;
-        } else if (remainingTroops >= 50 * fusionRate) {
-            troopCounts[4]++;
-            remainingTroops -= 50 * fusionRate;
-        } else if (remainingTroops >= 20 * fusionRate) {
-            troopCounts[3]++;
-            remainingTroops -= 20 * fusionRate;
-        } else if (remainingTroops >= 10 * fusionRate) {
-            troopCounts[2]++;
-            remainingTroops -= 10 * fusionRate;
-        } else if (remainingTroops >= 5 * fusionRate) {
-            troopCounts[1]++;
-            remainingTroops -= 5 * fusionRate;
-        } else {
-            // Always have at least one basic troop
-            troopCounts[0] = Math.max(1, Math.min(remainingTroops, 5)); 
-            remainingTroops = 0;
-        }
-        
-        // Limit total visualized troops
-        if (troopMeshes.length + troopCounts.reduce((a, b) => a + b, 0) > MAX_TROOPS_DISPLAYED) {
-            break;
-        }
-    }
-    
-    // Create troops of each level in formation with better spacing
-    // Position légèrement reculée
-    let xPos = -6;
-    let zPos = -3; // Reculé de -2 à -3
-    const xSpacing = 2.5; 
-    const zSpacing = 2.5; 
-    
-    // Create highest level troops first (bigger ones in back)
-    for (let level = 9; level >= 0; level--) {
-        const count = troopCounts[level];
-        for (let i = 0; i < count && troopMeshes.length < MAX_TROOPS_DISPLAYED; i++) {
-            const troop = createTroopMesh(level, { x: xPos, z: zPos });
-            troopMeshes.push(troop);
-            
-            // Set the first troop as player
-            if (!player) player = troop;
-            
-            // Update position for next troop with better spacing
-            xPos += xSpacing;
-            if (xPos > 6) {
-                xPos = -6;
-                zPos -= zSpacing;
-            }
-        }
-    }
-    
-    // If no troops were created, create at least one
-    if (troopMeshes.length === 0) {
-        const troop = createTroopMesh(0, { x: 0, z: -3 }); // Reculé de -2 à -3
-        troopMeshes.push(troop);
-        player = troop;
-    }
-}
-
-// Create multiplier door - Final version with transparent halo only
-function createMultiplier() {
-    // Define multiplier types with more vibrant colors
-    const types = [
-        { op: "+", color: 0x00ddff, min: 1, max: 5, positive: true },  // Brighter blue for addition
-        { op: "-", color: 0xff2222, min: 1, max: 10, positive: false }, // Vibrant red for subtraction
-        { op: "×", color: 0x00ddff, min: 2, max: 3, positive: true },  // Multiplication max 3 au lieu de 5
-        { op: "÷", color: 0xff2222, min: 2, max: 3, positive: false }  // Vibrant red for division
-    ];
-    
-    // Randomly select type - plus de malus que de bonus
-    let typeIndex;
-    if (Math.random() < 0.65) { // 65% de chance d'avoir un malus
-        // Sélection parmi les malus (index 1 et 3)
-        typeIndex = Math.random() < 0.5 ? 1 : 3; // - ou ÷
-    } else {
-        // Sélection parmi les bonus (index 0 et 2)
-        typeIndex = Math.random() < 0.5 ? 0 : 2; // + ou ×
-    }
-    const type = types[typeIndex];
-    
-    // Generate value
-    const value = Math.floor(Math.random() * (type.max - type.min + 1)) + type.min;
-    
-    // Create door group
-    const doorGroup = new THREE.Group();
-    
-    // Create just the transparent halo (no pillars) with more vibrant color
-    const haloGeometry = new THREE.PlaneGeometry(8, 6); // Less wide as requested
-    const haloMaterial = new THREE.MeshBasicMaterial({
-        color: type.color,
-        transparent: true,
-        opacity: 0.4, // Slightly more opaque for more vibrant look
-        side: THREE.DoubleSide
-    });
-    const halo = new THREE.Mesh(haloGeometry, haloMaterial);
-    halo.position.set(0, 4, 0);
-    doorGroup.add(halo);
-    
-    // Add a brighter glowing edge to the halo
-    const edgeGeometry = new THREE.EdgesGeometry(haloGeometry);
-    const edgeMaterial = new THREE.LineBasicMaterial({
-        color: type.color,
-        linewidth: 3, // Thicker line for more visibility
-        transparent: true,
-        opacity: 0.9 // More visible
-    });
-    const edges = new THREE.LineSegments(edgeGeometry, edgeMaterial);
-    edges.position.set(0, 4, 0.05);
-    doorGroup.add(edges);
-    
-    // Create text for the multiplier value
-    const valueText = document.createElement("canvas");
-    valueText.width = 512;
-    valueText.height = 512;
-    const ctx = valueText.getContext("2d");
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, valueText.width, valueText.height);
-    
-    // Make the text more vibrant and prominent
-    // Draw the value text with enhanced glow effects
-    // First create a glow effect
-    ctx.shadowColor = type.positive ? "rgba(0, 200, 255, 0.8)" : "rgba(255, 50, 50, 0.8)";
-    ctx.shadowBlur = 25; // Increased blur for more glow
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    
-    // Draw text in pure white for maximum contrast
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 300px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    
-    // Format the text to match the reference (e.g., "-8" or "+5")
-    const displayText = type.op + value;
-    
-    // Draw the text multiple times for stronger glow effect
-    for (let i = 0; i < 3; i++) {
-        ctx.shadowBlur = 15 + i * 10;
-        ctx.fillText(displayText, valueText.width / 2, valueText.height / 2);
-    }
-    
-    // Final text layer without shadow for crisp edges
-    ctx.shadowBlur = 0;
-    ctx.fillText(displayText, valueText.width / 2, valueText.height / 2);
-    
-    const textTexture = new THREE.CanvasTexture(valueText);
-    const textMaterial = new THREE.MeshBasicMaterial({
-        map: textTexture,
-        transparent: true,
-        depthWrite: false
-    });
-    
-    const textPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(7, 5), // Proportional to the halo
-        textMaterial
-    );
-    textPlane.position.set(0, 4, 0.2);
-    doorGroup.add(textPlane);
-    
-    // Enhanced glowing effect around the halo - more vibrant
-    const glowGeometry = new THREE.TorusGeometry(4.2, 0.3, 16, 32);
-    const glowMaterial = new THREE.MeshBasicMaterial({
-        color: type.color,
-        transparent: true,
-        opacity: 0.7 // Brighter glow
-    });
-    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-    glow.position.set(0, 4, 0.1);
-    glow.rotation.x = Math.PI / 2;
-    doorGroup.add(glow);
-    
-    // Add an outer glow for more dramatic effect
-    const outerGlowGeometry = new THREE.TorusGeometry(4.5, 0.2, 16, 32);
-    const outerGlowMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.5
-    });
-    const outerGlow = new THREE.Mesh(outerGlowGeometry, outerGlowMaterial);
-    outerGlow.position.set(0, 4, 0.12);
-    outerGlow.rotation.x = Math.PI / 2;
-    doorGroup.add(outerGlow);
-    
-    // Add particle effect for more visual impact
-    const particleCount = 50;
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-    
-    for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        // Position particles in a circular pattern around the halo
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 3.8 + Math.random() * 1.5;
-        particlePositions[i3] = Math.cos(angle) * radius;
-        particlePositions[i3 + 1] = 4 + (Math.random() * 2 - 1) * 2.5; // y position around center
-        particlePositions[i3 + 2] = Math.sin(angle) * radius * 0.2; // slight depth
-    }
-    
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    
-    const particleMaterial = new THREE.PointsMaterial({
-        color: type.color,
-        size: 0.1,
-        transparent: true,
-        opacity: 0.7
-    });
-    
-    const particles = new THREE.Points(particleGeometry, particleMaterial);
-    doorGroup.add(particles);
-    
-    // Set random position on x-axis et très loin en z pour apparition
-    const x = Math.random() * 20 - 10; // Entre -10 et 10
-    doorGroup.position.set(x, 0, -120); // -120 au lieu de -80 pour apparaître beaucoup plus loin
-    
-    // Add to scene and multipliers array
-    scene.add(doorGroup);
-    
-    // Different effects based on operator
-    let effect;
-    if (type.op === "+") {
-        effect = t => t + value;
-    } else if (type.op === "-") {
-        effect = t => Math.max(0, t - value);
-    } else if (type.op === "×") {
-        effect = t => t * value;
-    } else if (type.op === "÷") {
-        effect = t => Math.max(1, Math.floor(t / value));
-    }
-    
-    // Store multiplier info with the object for animation
-    multipliers.push({
-        mesh: doorGroup,
-        type: type.op,
-        value: value,
-        effect: effect,
-        color: type.color,
-        positive: type.positive,
-        particles: particles,
-        outerGlow: outerGlow,
-        glow: glow,
-        createTime: Date.now()
-    });
-    
-    return doorGroup;
-}
-
-// Function for portal entry effect
-function createPortalEntryEffect(x, z, color) {
-    // Create particles bursting outward
-    const particleCount = 100;
-    const particleGeometry = new THREE.BufferGeometry();
-    const particlePositions = new Float32Array(particleCount * 3);
-    const particleVelocities = [];
-    
-    for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        // Start particles at player position
-        particlePositions[i3] = x;
-        particlePositions[i3 + 1] = 0.5 + Math.random();
-        particlePositions[i3 + 2] = z;
-        
-        // Random velocity in all directions
-        particleVelocities.push({
-            x: (Math.random() - 0.5) * 0.4,
-            y: Math.random() * 0.2,
-            z: (Math.random() - 0.5) * 0.4
-        });
-    }
-    
-    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-    
-    const particleMaterial = new THREE.PointsMaterial({
-        color: color,
-        size: 0.2,
-        transparent: true,
-        opacity: 0.8
-    });
-    
-    const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
-    scene.add(particleSystem);
-    
-    // Create animation for the particles
-    const particleAnimation = {
-        system: particleSystem,
-        geometry: particleGeometry,
-        velocities: particleVelocities,
-        life: 60,  // Frames to live
-        update: function() {
-            const positions = this.geometry.attributes.position.array;
-            
-            for (let i = 0; i < particleCount; i++) {
-                const i3 = i * 3;
-                const vel = this.velocities[i];
-                
-                // Update position with velocity
-                positions[i3] += vel.x;
-                positions[i3 + 1] += vel.y;
-                positions[i3 + 2] += vel.z;
-                
-                // Add gravity effect
-                vel.y -= 0.01;
-            }
-            
-            this.geometry.attributes.position.needsUpdate = true;
-            
-            // Fade out
-            this.system.material.opacity = this.life / 60;
-            
-            // Decrease life
-            this.life--;
-            
-            // Remove when done
-            if (this.life <= 0) {
-                scene.remove(this.system);
-                return false;
-            }
-            
-            return true;
-        }
-    };
-    
-    // Add to array of effects to update
-    effectsToUpdate.push(particleAnimation);
-    
-    return particleAnimation;
-}
-
-// Window resize handler
-function onWindowResize() {
-    camera.aspect = gameContainer.clientWidth / gameContainer.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(gameContainer.clientWidth, gameContainer.clientHeight);
-}
-
-// Mouse controls
-function handleMouseMove(event) {
-    if (gamePaused) return;
-    
-    // Calculate mouse position relative to container
-    const rect = gameContainer.getBoundingClientRect();
-    const mouseX = ((event.clientX - rect.left) / gameContainer.clientWidth) * 2 - 1;
-    
-    // Convert to world coordinates (wider range for 3-lane road)
-    targetPlayerX = mouseX * 10; // Multiplier par 10 au lieu de 8 pour la route plus large
-    
-    // Update cursor position
-    if (mouseCursor) {
-        mouseCursor.position.x = targetPlayerX;
-    }
-}
-
-// Keyboard controls for pause
-function handleKeyDown(event) {
-    // Handle pause toggle with "P" key
-    if (event.key === "p" || event.key === "P") {
-        if (gameStarted && !gameOver) {
-            gamePaused = !gamePaused;
-            pauseScreenElement.style.display = gamePaused ? "block" : "none";
-        }
-    }
-}
-
-// Start game
-function startGame() {
-    gameStarted = true;
-    menu.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    updateUI();
-}
-
-// Restart game
-function restartGame() {
-    // Reset game state
-    gameOver = false;
-    gamePaused = false;
-    troops = 1;
-    score = 0;
-    fusionRate = 1;
-    timeElapsed = 0;
-    lastSpawnTime = 0;
-    targetPlayerX = 0;
-    
-    // Remove all multipliers
-    for (let i = 0; i < multipliers.length; i++) {
-        scene.remove(multipliers[i].mesh);
-    }
-    multipliers = [];
-    
-    // Reset troops
-    updateTroops();
-    
-    // Hide game over, show UI
-    gameOverScreen.style.display = "none";
-    pauseScreenElement.style.display = "none";
-    ui.style.display = "block";
-    controlsInfo.style.display = "block";
-    
-    updateUI();
-}
-
-// Update UI
-function updateUI() {
-    troopsCount.textContent = troops;
-    fusionRateElement.textContent = fusionRate;
-    finalScore.textContent = troops; // Le score final est le nombre de poulets
-}
-
-// Check for game over
-function checkGameOver() {
-    if (troops <= 0 && !gameOver) {
-        gameOver = true;
-        ui.style.display = "none";
-        controlsInfo.style.display = "none";
-        gameOverScreen.style.display = "block";
-        updateUI();
-    }
-}
-
-// Animation loop
-function animate(time) {
-    requestAnimationFrame(animate);
-    
-    // Skip updates if paused
-    if (gamePaused) {
-        renderer.render(scene, camera);
-        return;
-    }
-    
-    if (gameStarted && !gameOver) {
-        // Convert time to seconds
-        const now = time * 0.001;
-        const deltaTime = now - timeElapsed;
-        timeElapsed = now;
-        
-        // Smooth player movement (lerp)
-        if (player) {
-            // Gradually move towards target position
-            player.position.x += (targetPlayerX - player.position.x) * 0.05;
-            
-            // Limit position (wider limits for wider road)
-            player.position.x = Math.max(-12, Math.min(12, player.position.x)); // Limites plus larges
-            
-            // Move all troops to follow the leader in formation with better spacing
-            for (let i = 1; i < troopMeshes.length; i++) {
-                const troop = troopMeshes[i];
-                
-                // Calculate positions in a grid pattern with more space
-                const row = Math.floor(i / 4); // 4 poulets par rangée au lieu de 5
-                const col = i % 4;
-                
-                // Position offset from leader with more space
-                const offsetX = (col - 1.5) * 2.5; // Plus d'espace (2.5 au lieu de 2.0)
-                const offsetZ = -row * 2.5; // Plus d'espace (2.5 au lieu de 2.0)
-                
-                // Target position
-                const targetX = player.position.x + offsetX;
-                const targetZ = player.position.z + offsetZ;
-                
-                // Smoother movement for followers
-                troop.position.x += (targetX - troop.position.x) * 0.05;
-                troop.position.z += (targetZ - troop.position.z) * 0.05;
-                
-                // Add chicken waddle animation
-                troop.position.y = Math.sin(now * 8 + i) * 0.1;
-                
-                // Wing flapping for random chickens
-                if (troop.children[5]) { // Left wing
-                    troop.children[5].rotation.z = Math.sin(now * 10 + i) * 0.2 - 0.3;
-                }
-                if (troop.children[6]) { // Right wing
-                    troop.children[6].rotation.z = -Math.sin(now * 10 + i) * 0.2 + 0.3;
-                }
-            }
-            
-            // Add chicken waddle animation to leader too
-            player.position.y = Math.sin(now * 8) * 0.1;
-            
-            // Wing flapping for leader
-            if (player.children[5]) { // Left wing
-                player.children[5].rotation.z = Math.sin(now * 10) * 0.2 - 0.3;
-            }
-            if (player.children[6]) { // Right wing
-                player.children[6].rotation.z = -Math.sin(now * 10) * 0.2 + 0.3;
-            }
-            
-            // Animer les particules des poulets évolués
-            for (let i = 0; i < troopMeshes.length; i++) {
-                const troop = troopMeshes[i];
-                if (troop.particles) {
-                    troop.particles.rotation.y += 0.02; // Rotation des particules
-                }
-            }
-        }
-        
-        // Spawn multipliers
-        if (now - lastSpawnTime > multiplierSpawnRate) {
-            lastSpawnTime = now;
-            createMultiplier();
-            
-            // Increase spawn rate with score
-            multiplierSpawnRate = Math.max(0.8, 2 - (score / 1000));
-        }
-        
-        // Update multipliers
-        for (let i = multipliers.length - 1; i >= 0; i--) {
-            const multiplier = multipliers[i];
-            
-            // Move multiplier towards player
-            multiplier.mesh.position.z += 0.2;
-            
-            // Animate portal elements
-            if (multiplier.glow) {
-                // Pulse the glow
-                const pulseSpeed = 0.003;
-                const elapsedTime = (Date.now() - multiplier.createTime) * pulseSpeed;
-                const pulseFactor = 0.2 * Math.sin(elapsedTime) + 1;
-                
-                multiplier.glow.scale.set(pulseFactor, pulseFactor, 1);
-                
-                // Make outer glow rotate
-                if (multiplier.outerGlow) {
-                    multiplier.outerGlow.rotation.z += 0.01;
-                }
-            }
-            
-            // Animate particles if they exist
-            if (multiplier.particles) {
-                // Make particles slowly rotate
-                multiplier.particles.rotation.z += 0.005;
-            }
-            
-            // Check for collision with player - ZONE DE COLLISION AGRANDIE
-            if (player && 
-                multiplier.mesh.position.z > -2 && multiplier.mesh.position.z < 2 &&
-                Math.abs(multiplier.mesh.position.x - player.position.x) < 3) { // Agrandie de 2 à 3
-                
-                // Apply multiplier effect
-                const oldTroops = troops;
-                troops = multiplier.effect(troops);
-                
-                // Fusion rate ne change que sur gain important
-                if (troops > oldTroops * 2 && troops > 50) {
-                    fusionRate = Math.min(fusionRate + 1, 10);
-                }
-                
-                // Update troops visualization
-                updateTroops();
-                
-                // Add visual effect for entering portal (conservé)
-                createPortalEntryEffect(player.position.x, player.position.z, multiplier.color);
-                
-                // Suppression des effets de flash
-                // Plus d'appel à showFlashEffect() ou showBorderEffect()
-                
-                // Remove multiplier
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-                
-                updateUI();
-                checkGameOver();
-            }
-            // Remove if passed player
-            else if (multiplier.mesh.position.z > 10) {
-                scene.remove(multiplier.mesh);
-                multipliers.splice(i, 1);
-            }
-        }
-        
-        // Update mouse cursor
-        if (mouseCursor) {
-            mouseCursor.position.z = 5;
-            mouseCursor.rotation.z += 0.01;
-        }
-        
-        // Update road segments - Fonction améliorée
-        updateRoadSegments();
-        
-        // Add water animation
-        if (waterLeft && waterRight) {
-            waterLeft.position.z = player ? player.position.z : 0;
-            waterRight.position.z = player ? player.position.z : 0;
-            
-            // Add wave effect to water
-            const waterWave = Math.sin(now) * 0.2;
-            waterLeft.position.y = -1 + waterWave;
-            waterRight.position.y = -1 + waterWave;
-        }
-        
-        // Update visual effects
-        for (let i = effectsToUpdate.length - 1; i >= 0; i--) {
-            const stillAlive = effectsToUpdate[i].update();
-            if (!stillAlive) {
-                effectsToUpdate.splice(i, 1);
-            }
-        }
-    }
-    
-    renderer.render(scene, camera);
-}
-
-// Initialize everything
-init();
