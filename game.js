@@ -214,7 +214,6 @@ function createSkybox() {
     scene.add(sky);
 }
 
-// Fonction pour créer des pylônes de pont
 // Fonction pour créer des pylônes de pont plus réguliers
 function createBridgePylons() {
     // Nettoyons d'abord les éléments existants
@@ -531,66 +530,6 @@ function createFlyingBirds() {
     animateBirds();
 }
 
-// Fonction pour créer les câbles de suspension
-function createSuspensionCables() {
-    // Matériau pour les câbles
-    const cableMaterial = new THREE.MeshPhongMaterial({
-        color: 0xDD3333, // Rouge plus foncé pour les câbles
-        shininess: 80
-    });
-    
-    // Groupe pour contenir tous les câbles
-    const cablesGroup = new THREE.Group();
-    
-    // Câbles principaux horizontaux (de chaque côté)
-    const leftMainCable = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
-        cableMaterial
-    );
-    leftMainCable.rotation.z = Math.PI / 2;
-    leftMainCable.position.set(-15, 25, -50); // Élargi à -15 au lieu de -13
-    leftMainCable.castShadow = true;
-    cablesGroup.add(leftMainCable);
-    
-    const rightMainCable = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.3, 250, 8),
-        cableMaterial
-    );
-    rightMainCable.rotation.z = Math.PI / 2;
-    rightMainCable.position.set(15, 25, -50); // Élargi à 15 au lieu de 13
-    rightMainCable.castShadow = true;
-    cablesGroup.add(rightMainCable);
-    
-    // Câbles verticaux (qui relient le câble principal à la route)
-    for (let z = -150; z <= 40; z += 10) {
-        // Câble gauche
-        const leftCable = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
-            cableMaterial
-        );
-        leftCable.position.set(-15, 12.5, z); // Élargi à -15 au lieu de -13
-        leftCable.castShadow = true;
-        cablesGroup.add(leftCable);
-        
-        // Câble droit
-        const rightCable = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.1, 0.1, 25, 4),
-            cableMaterial
-        );
-        rightCable.position.set(15, 12.5, z); // Élargi à 15 au lieu de 13
-        rightCable.castShadow = true;
-        cablesGroup.add(rightCable);
-    }
-    
-    scene.add(cablesGroup);
-    
-    // Stocker la position initiale
-    cablesGroup.userData = { initialZ: -50 };
-    
-    // Ajouter le groupe de câbles au tableau des éléments du pont
-    bridgeElements.push(cablesGroup);
-}
-
 // Create water surfaces
 function createWaterSurfaces() {
     const waterGeometry = new THREE.PlaneGeometry(150, 150); // Agrandi à 150x150 au lieu de 100x100
@@ -707,6 +646,37 @@ function createRealisticBridgeRailings(xPos, zPos) {
     return railingGroup;
 }
 
+// Fonction pour créer une texture de route
+function createRoadTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    
+    // Fond gris foncé pour l'asphalte
+    ctx.fillStyle = '#444444';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Lignes blanches au milieu
+    ctx.fillStyle = '#ffffff';
+    const dashLength = 30;
+    const dashGap = 20;
+    for (let y = 0; y < canvas.height; y += dashLength + dashGap) {
+        ctx.fillRect(canvas.width / 2 - 5, y, 10, dashLength);
+    }
+    
+    // Lignes de côté continues
+    ctx.fillRect(20, 0, 5, canvas.height);
+    ctx.fillRect(canvas.width - 25, 0, 5, canvas.height);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 10);
+    
+    return texture;
+}
+
 // Fonction améliorée pour créer des segments de route sans trous
 function createRoadSegments() {
     // Utilisons une taille fixe pour tous les segments
@@ -770,7 +740,6 @@ function createRoadSegments() {
 }
 
 // Update road segments to avoid gaps
-// Update road segments to avoid gaps
 function updateRoadSegments() {
     if (gamePaused) return;
     
@@ -791,6 +760,158 @@ function updateRoadSegments() {
         if (segment.position.z > 50) {
             segment.position.z -= totalRoadLength;
         }
+    }
+}
+
+// Fonction pour créer un curseur de souris
+function createMouseCursor() {
+    const cursorGeometry = new THREE.RingGeometry(0.5, 0.7, 32);
+    const cursorMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffff00,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.7
+    });
+    
+    mouseCursor = new THREE.Mesh(cursorGeometry, cursorMaterial);
+    mouseCursor.rotation.x = Math.PI / 2;
+    mouseCursor.position.set(0, 0.1, 5);
+    
+    scene.add(mouseCursor);
+}
+
+// Fonction pour créer des effets d'écran
+function createScreenEffects() {
+    // Effet de flash pour les bonus
+    const flashGeometry = new THREE.PlaneGeometry(100, 100);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: false
+    });
+    
+    flashEffect = new THREE.Mesh(flashGeometry, flashMaterial);
+    flashEffect.position.z = 0;
+    flashEffect.renderOrder = 999; // Assure qu'il est rendu au-dessus de tout
+    
+    // Ajouter à la caméra pour qu'il suive toujours la vue
+    camera.add(flashEffect);
+    
+    // Positionner devant la caméra
+    flashEffect.position.set(0, 0, -1);
+    
+    // Effet de bordure rouge pour les malus
+    const borderGeometry = new THREE.RingGeometry(9, 10, 32);
+    const borderMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0,
+        side: THREE.DoubleSide,
+        depthTest: false
+    });
+    
+    screenBorderEffect = new THREE.Mesh(borderGeometry, borderMaterial);
+    screenBorderEffect.renderOrder = 998;
+    
+    // Ajouter à la caméra
+    camera.add(screenBorderEffect);
+    
+    // Positionner devant la caméra
+    screenBorderEffect.position.set(0, 0, -1);
+    
+    // Ajouter la caméra à la scène après y avoir ajouté les effets
+    scene.add(camera);
+}
+
+// Fonction pour créer un poulet
+function createTroopMesh(level, position) {
+    // Taille qui augmente avec le niveau
+    const sizeMultiplier = 1 + level * 0.2;
+    
+    const troopGroup = new THREE.Group();
+    
+    // Corps (ovale)
+    const bodyGeometry = new THREE.SphereGeometry(0.5 * sizeMultiplier, 16, 16);
+    const bodyMaterial = new THREE.MeshPhongMaterial({
+        color: troopColors[level],
+        shininess: 30
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.scale.set(1, 1.2, 1.5);
+    body.position.set(0, 0.6 * sizeMultiplier, 0);
+    body.castShadow = true;
+    troopGroup.add(body);
+    
+    // Tête
+    const headGeometry = new THREE.SphereGeometry(0.3 * sizeMultiplier, 16, 16);
+    const head = new THREE.Mesh(headGeometry, bodyMaterial);
+    head.position.set(0, 1.0 * sizeMultiplier, 0.4 * sizeMultiplier);
+    head.castShadow = true;
+    troopGroup.add(head);
+    
+    // Bec
+    const beakGeometry = new THREE.ConeGeometry(0.1 * sizeMultiplier, 0.3 * sizeMultiplier, 8);
+    const beakMaterial = new THREE.MeshPhongMaterial({
+        color: 0xff9900,
+        shininess: 30
+    });
+    const beak = new THREE.Mesh(beakGeometry, beakMaterial);
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0, 1.0 * sizeMultiplier, 0.7 * sizeMultiplier);
+    beak.castShadow = true;
+    troopGroup.add(beak);
+    
+    // Crête
+    const combGeometry = new THREE.BoxGeometry(
+        0.05 * sizeMultiplier,
+        0.2 * sizeMultiplier,
+        0.3 * sizeMultiplier
+    );
+    const combMaterial = new THREE.MeshPhongMaterial({
+        color: 0xff0000,
+        shininess: 30
+    });
+    
+    // Plusieurs morceaux de crête
+    for (let i = 0; i < 3; i++) {
+        const comb = new THREE.Mesh(combGeometry, combMaterial);
+        comb.position.set(
+            (i - 1) * 0.05 * sizeMultiplier,
+            1.2 * sizeMultiplier,
+            0.3 * sizeMultiplier
+        );
+        comb.castShadow = true;
+        troopGroup.add(comb);
+    }
+    
+    // Fonction pour créer une patte
+    function createLeg(xOffset) {
+        const legGeometry = new THREE.CylinderGeometry(
+            0.03 * sizeMultiplier,
+            0.03 * sizeMultiplier,
+            0.5 * sizeMultiplier
+        );
+        const legMaterial = new THREE.MeshPhongMaterial({
+            color: 0xff9900,
+            shininess: 30
+        });
+        const leg = new THREE.Mesh(legGeometry, legMaterial);
+        leg.position.set(xOffset, 0.25 * sizeMultiplier, 0);
+        leg.castShadow = true;
+        troopGroup.add(leg);
+        
+        // Pied
+        const footGeometry = new THREE.BoxGeometry(
+            0.15 * sizeMultiplier,
+            0.05 * sizeMultiplier,
+            0.15 * sizeMultiplier
+        );
+        const foot = new THREE.Mesh(footGeometry, legMaterial);
+        foot.position.set(xOffset, 0.025 * sizeMultiplier, 0.05 * sizeMultiplier);
+        foot.castShadow = true;
+        troopGroup.add(foot);
     }
     
     // Créer les deux pattes
