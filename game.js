@@ -1894,5 +1894,10 @@ function animate(time) {
     renderer.render(scene, camera);
 }
 
+// Exposer les fonctions et variables au scope global
+window.startGame = startGame;
+window.restartGame = restartGame;
+window.gameInitialized = true;
+
 // Initialize everything
 init();
