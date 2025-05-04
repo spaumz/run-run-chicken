@@ -3921,7 +3921,7 @@ function createPlayerShield(duration) {
 }
 
 // Play sound effect
-function playSound(name, options = {}) {
+function playSoundEffect(name, options = {}) {
     // Create audio context if not initialized
     if (!audioContext) {
         try {
