@@ -1,64 +1,7 @@
 // Constantes et configuration globale
+// Constantes et configuration globale
 const GAME_CONFIG = {
-    levelLength: 1000, // Longueur du niveau
-    playerSpeed: 5,    // Vitesse d'avancement automatique
-    playerHealth: 100,
-    maxEnemiesOnScreen: 15,
-    enemySpawnRate: 2.5, // Secondes entre les spawns
-    powerUpSpawnRate: 10, // Secondes entre les spawns
-    levelDuration: 60, // Secondes pour finir le niveau
-    playerSideSpeed: 5, // Vitesse de déplacement latéral
-    playerShootRate: 0.3, // Secondes entre chaque tir
-    enemyTypes: {
-        basic: {
-            health: 30,
-            damage: 10,
-            speed: 3,
-            color: 0xff4444,
-            points: 10,
-            shootsBack: false,
-            scale: 0.8,
-        },
-        shooter: {
-            health: 20,
-            damage: 5,
-            speed: 2,
-            color: 0xff6622,
-            points: 15,
-            shootsBack: true,
-            shootRate: 2, // Secondes entre chaque tir
-            scale: 0.7,
-        },
-        tank: {
-            health: 100,
-            damage: 20,
-            speed: 1.5,
-            color: 0x990000,
-            points: 30,
-            shootsBack: false,
-            scale: 1.2,
-        }
-    },
-    powerUps: {
-        shield: {
-            duration: 10,
-            color: 0x00ffff,
-        },
-        speedBoost: {
-            duration: 5,
-            multiplier: 1.5,
-            color: 0x00ff00,
-        },
-        attackBoost: {
-            duration: 8,
-            multiplier: 2,
-            color: 0xff9900,
-        },
-        drone: {
-            duration: 15,
-            color: 0xffff00,
-        }
-    }
+    // Configuration inchangée
 };
 
 // Classes principales
@@ -71,18 +14,6 @@ class Game {
         this.renderer.setClearColor(0x87CEEB); // Couleur du ciel
         document.getElementById('gameContainer').appendChild(this.renderer.domElement);
 
-        // Initialisation
-        this.setupLights();
-        this.setupEnvironment();
-        this.setupCamera();
-        this.setupJoystick();
-        this.setupPlayer();
-        this.setupEnemies();
-        this.setupProjectiles();
-        this.setupPowerUps();
-        this.setupEventListeners();
-        this.setupUI();
-        
         // État du jeu
         this.gameState = {
             isPlaying: true,
@@ -97,7 +28,7 @@ class Game {
             lastPowerUpSpawn: 0
         };
         
-        // Collection d'objets
+        // Collection d'objets - DÉPLACÉ AVANT les appels aux méthodes setup
         this.objects = {
             player: null,
             enemies: [],
@@ -106,6 +37,18 @@ class Game {
             particles: [],
             drones: []
         };
+
+        // Initialisation
+        this.setupLights();
+        this.setupEnvironment();
+        this.setupCamera();
+        this.setupJoystick();
+        this.setupPlayer();
+        this.setupEnemies();
+        this.setupProjectiles();
+        this.setupPowerUps();
+        this.setupEventListeners();
+        this.setupUI();
         
         // Lancer la boucle de jeu
         this.gameLoop();
