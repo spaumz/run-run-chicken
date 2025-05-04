@@ -3,16 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cosmic Chickens: Galactic Run</title>
+    <title>Last War: Survival Game</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <style>
         /* Base styles */
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
         
         body {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            font-family: 'Orbitron', sans-serif;
+            font-family: 'Rajdhani', sans-serif;
             background-color: #000;
             color: #fff;
         }
@@ -22,24 +29,22 @@
             height: 100vh;
             position: relative;
             overflow: hidden;
-            margin: 0 auto;
         }
         
-        /* Menu principal avec effet spatial */
+        /* Menu principal */
         #menu {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, rgba(25, 25, 60, 0.9), rgba(10, 10, 40, 0.95));
+            background: linear-gradient(135deg, rgba(20, 20, 40, 0.8), rgba(40, 40, 60, 0.9));
             color: white;
             padding: 30px 50px;
-            border-radius: 15px;
+            border-radius: 10px;
             text-align: center;
-            z-index: 10;
-            box-shadow: 0 0 30px rgba(100, 120, 255, 0.6);
-            border: 2px solid rgba(100, 200, 255, 0.5);
-            backdrop-filter: blur(5px);
+            z-index: 100;
+            box-shadow: 0 0 30px rgba(0, 150, 255, 0.4);
+            border: 1px solid rgba(0, 150, 255, 0.5);
             max-width: 90%;
             width: 500px;
         }
@@ -47,9 +52,10 @@
         #menu h1 {
             font-size: 36px;
             margin-bottom: 10px;
-            color: #80f0ff;
-            text-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
-            animation: glow 2s infinite alternate;
+            color: #00a8ff;
+            text-shadow: 0 0 10px rgba(0, 150, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
         
         #menu p {
@@ -60,7 +66,7 @@
         }
         
         #start-button {
-            background: linear-gradient(to right, #3498db, #9b59b6);
+            background: linear-gradient(to right, #00a8ff, #036bb9);
             border: none;
             color: white;
             padding: 15px 32px;
@@ -72,57 +78,155 @@
             cursor: pointer;
             border-radius: 30px;
             transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(100, 150, 255, 0.6);
-            font-family: 'Orbitron', sans-serif;
+            box-shadow: 0 0 15px rgba(0, 150, 255, 0.4);
+            font-family: 'Rajdhani', sans-serif;
             font-weight: bold;
             letter-spacing: 1px;
         }
         
         #start-button:hover {
-            background: linear-gradient(to right, #9b59b6, #3498db);
+            background: linear-gradient(to right, #036bb9, #00a8ff);
             transform: translateY(-2px) scale(1.05);
-            box-shadow: 0 0 25px rgba(100, 200, 255, 0.8);
+            box-shadow: 0 0 25px rgba(0, 150, 255, 0.6);
         }
         
         /* Interface utilisateur en jeu */
         #ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            color: white;
-            font-size: 20px;
-            text-shadow: 0 0 5px rgba(100, 150, 255, 0.7);
-            background: linear-gradient(135deg, rgba(20, 20, 50, 0.7), rgba(40, 40, 80, 0.7));
-            padding: 15px 25px;
-            border-radius: 15px;
-            z-index: 5;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
             display: none;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(100, 200, 255, 0.3);
-            backdrop-filter: blur(3px);
+            z-index: 90;
         }
         
-        .stat {
-            margin: 10px 0;
+        /* Barre de santé */
+        .ui-bar {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            height: 20px;
+            margin: 8px 0;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        #health-bar-container {
+            width: 50%;
+            float: left;
+        }
+        
+        #health-bar {
+            width: 100%;
+        }
+        
+        #health-bar-inner {
+            background: linear-gradient(to right, #00ff00, #aaff00);
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+        
+        /* Score */
+        #score-container {
+            float: right;
+            text-align: right;
+            padding-right: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 5px #000;
+        }
+        
+        #score {
+            color: #ffaa00;
+            font-size: 28px;
+        }
+        
+        /* Progression de vague */
+        #wave-container {
+            width: 100%;
+            clear: both;
+            padding-top: 5px;
+        }
+        
+        #wave-text {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-shadow: 0 0 5px #000;
+        }
+        
+        #wave-progress-bar {
+            width: 100%;
+        }
+        
+        #wave-progress-inner {
+            background: linear-gradient(to right, #00a8ff, #0066cc);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        
+        /* Power-up indicator */
+        #power-up-indicator {
+            position: absolute;
+            right: 15px;
+            top: 60px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .power-up-icon {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            width: 50px;
+            height: 50px;
             display: flex;
             align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
         }
         
-        .stat-icon {
-            margin-right: 10px;
-            width: 24px;
-            height: 24px;
-            display: inline-block;
-            background-size: contain;
-            background-repeat: no-repeat;
+        .power-up-icon span {
+            position: absolute;
+            bottom: 2px;
+            right: 5px;
+            font-size: 12px;
+            font-weight: bold;
         }
         
-        .chicken-icon {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12,2L9,4L7,4L7,6L5,8L5,10L7,12L9,14L9,16L7,18L7,20L9,22L12,22L14,22L16,20L16,18L14,16L14,14L16,12L18,10L18,8L16,6L16,4L14,4Z"/></svg>');
+        /* Joystick */
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            z-index: 95;
         }
         
-        .fusion-icon {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M12,2L6,7H10V13H14V7H18M12,22L6,17H10V11H14V17H18Z"/></svg>');
+        #joystick {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            position: relative;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        #joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
         }
         
         /* Écran game over */
@@ -131,16 +235,15 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, rgba(60, 10, 30, 0.9), rgba(40, 5, 20, 0.95));
+            background: linear-gradient(135deg, rgba(60, 0, 0, 0.8), rgba(40, 0, 10, 0.9));
             color: white;
             padding: 30px 50px;
-            border-radius: 15px;
+            border-radius: 10px;
             text-align: center;
-            z-index: 10;
+            z-index: 100;
             display: none;
-            box-shadow: 0 0 30px rgba(255, 50, 80, 0.6);
-            border: 2px solid rgba(255, 100, 150, 0.5);
-            backdrop-filter: blur(5px);
+            box-shadow: 0 0 30px rgba(255, 0, 0, 0.4);
+            border: 1px solid rgba(255, 50, 50, 0.5);
             max-width: 90%;
             width: 500px;
         }
@@ -148,21 +251,22 @@
         #game-over h1 {
             font-size: 36px;
             margin-bottom: 20px;
-            color: #ff5c7a;
-            text-shadow: 0 0 10px rgba(255, 0, 80, 0.8);
-            animation: danger-glow 1.5s infinite alternate;
+            color: #ff3333;
+            text-shadow: 0 0 10px rgba(255, 0, 0, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
         
         #final-stats {
-            background: rgba(20, 20, 40, 0.6);
+            background: rgba(20, 0, 0, 0.6);
             border-radius: 10px;
             padding: 15px;
             margin: 15px 0;
-            border: 1px solid rgba(255, 100, 150, 0.3);
+            border: 1px solid rgba(255, 50, 50, 0.3);
         }
         
         #restart-button {
-            background: linear-gradient(to right, #e74c3c, #c0392b);
+            background: linear-gradient(to right, #ff3333, #aa0000);
             border: none;
             color: white;
             padding: 15px 32px;
@@ -174,16 +278,16 @@
             cursor: pointer;
             border-radius: 30px;
             transition: all 0.3s ease;
-            box-shadow: 0 0 15px rgba(255, 50, 80, 0.6);
-            font-family: 'Orbitron', sans-serif;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
+            font-family: 'Rajdhani', sans-serif;
             font-weight: bold;
             letter-spacing: 1px;
         }
         
         #restart-button:hover {
-            background: linear-gradient(to right, #c0392b, #e74c3c);
+            background: linear-gradient(to right, #aa0000, #ff3333);
             transform: translateY(-2px) scale(1.05);
-            box-shadow: 0 0 25px rgba(255, 100, 100, 0.8);
+            box-shadow: 0 0 25px rgba(255, 0, 0, 0.6);
         }
         
         /* Écran pause */
@@ -192,100 +296,69 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, rgba(30, 30, 60, 0.85), rgba(20, 20, 40, 0.9));
+            background: linear-gradient(135deg, rgba(20, 20, 60, 0.8), rgba(40, 40, 80, 0.9));
             color: white;
             padding: 30px 50px;
-            border-radius: 15px;
+            border-radius: 10px;
             text-align: center;
-            z-index: 10;
+            z-index: 100;
             display: none;
-            box-shadow: 0 0 30px rgba(150, 150, 255, 0.5);
-            border: 2px solid rgba(150, 150, 255, 0.3);
-            backdrop-filter: blur(8px);
+            box-shadow: 0 0 30px rgba(100, 100, 255, 0.4);
+            border: 1px solid rgba(100, 100, 255, 0.5);
         }
         
         #pause-screen h1 {
-            color: #a0c0ff;
-            text-shadow: 0 0 10px rgba(100, 150, 255, 0.8);
-        }
-        
-        /* Info contrôles */
-        #controls-info {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            font-size: 14px;
-            text-shadow: 0 0 5px rgba(100, 150, 255, 0.7);
-            background: linear-gradient(135deg, rgba(20, 20, 50, 0.7), rgba(40, 40, 80, 0.7));
-            padding: 12px 20px;
-            border-radius: 10px;
-            z-index: 5;
-            display: none;
-            border: 1px solid rgba(100, 200, 255, 0.3);
-            backdrop-filter: blur(3px);
+            font-size: 36px;
+            color: #aaaaff;
+            text-shadow: 0 0 10px rgba(100, 100, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 2px;
         }
         
         /* Effets visuels */
-        @keyframes glow {
-            from {
-                text-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
-            }
-            to {
-                text-shadow: 0 0 20px rgba(100, 200, 255, 1), 0 0 30px rgba(100, 150, 255, 0.8);
-            }
-        }
-        
-        @keyframes danger-glow {
-            from {
-                text-shadow: 0 0 10px rgba(255, 0, 80, 0.8);
-            }
-            to {
-                text-shadow: 0 0 20px rgba(255, 0, 80, 1), 0 0 30px rgba(255, 50, 80, 0.8);
-            }
-        }
-        
-        /* Effet de flash pour les bonus */
-        @keyframes positive-flash {
-            0% { opacity: 0; }
-            10% { opacity: 0.7; }
-            30% { opacity: 0.5; }
-            100% { opacity: 0; }
-        }
-        
-        /* Effet de flash pour les malus */
-        @keyframes negative-flash {
-            0% { opacity: 0; }
-            10% { opacity: 0.7; }
-            30% { opacity: 0.5; }
-            100% { opacity: 0; }
-        }
-        
-        /* Container pour les effets */
-        .positive-flash {
+        .screen-flash {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: radial-gradient(circle, rgba(50, 200, 255, 0.7) 0%, rgba(50, 200, 255, 0) 70%);
             pointer-events: none;
-            z-index: 100;
+            z-index: 95;
             opacity: 0;
-            animation: positive-flash 0.6s forwards;
+            transition: opacity 0.3s ease;
         }
         
-        .negative-flash {
+        .wave-complete {
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle, rgba(255, 50, 80, 0.7) 0%, rgba(255, 50, 80, 0) 70%);
-            pointer-events: none;
-            z-index: 100;
-            opacity: 0;
-            animation: negative-flash 0.6s forwards;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffff;
+            font-size: 40px;
+            font-weight: bold;
+            text-shadow: 0 0 20px #00aaff;
+            z-index: 95;
+            animation: wave-complete 2s forwards;
+            white-space: nowrap;
+        }
+        
+        @keyframes wave-complete {
+            0% { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            20% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1.2);
+            }
+            80% { 
+                opacity: 1; 
+                transform: translate(-50%, -50%) scale(1);
+            }
+            100% { 
+                opacity: 0; 
+                transform: translate(-50%, -50%) scale(1.5);
+            }
         }
         
         /* Loader */
@@ -300,20 +373,22 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 9999;
+            z-index: 999;
         }
         
         #loader h2 {
-            color: #80f0ff;
+            color: #00a8ff;
             margin-bottom: 20px;
-            text-shadow: 0 0 10px rgba(100, 200, 255, 0.8);
+            text-shadow: 0 0 10px rgba(0, 150, 255, 0.6);
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
         
         .loader-spinner {
             width: 50px;
             height: 50px;
-            border: 5px solid rgba(100, 200, 255, 0.2);
-            border-top: 5px solid #80f0ff;
+            border: 5px solid rgba(0, 150, 255, 0.2);
+            border-top: 5px solid #00a8ff;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -323,12 +398,11 @@
             100% { transform: rotate(360deg); }
         }
         
-        /* Barre de progression */
         .progress-container {
             width: 80%;
             max-width: 300px;
             height: 10px;
-            background: rgba(100, 200, 255, 0.2);
+            background: rgba(0, 150, 255, 0.2);
             border-radius: 5px;
             margin-top: 20px;
             overflow: hidden;
@@ -337,7 +411,7 @@
         .progress-bar {
             height: 100%;
             width: 0%;
-            background: linear-gradient(to right, #3498db, #9b59b6);
+            background: linear-gradient(to right, #00a8ff, #0066cc);
             border-radius: 5px;
             transition: width 0.3s ease;
         }
@@ -346,7 +420,7 @@
 <body>
     <!-- Écran de chargement -->
     <div id="loader">
-        <h2>Chargement de l'Univers Galactique</h2>
+        <h2>Chargement des ressources...</h2>
         <div class="loader-spinner"></div>
         <div class="progress-container">
             <div class="progress-bar" id="loading-progress"></div>
@@ -356,21 +430,38 @@
     <div id="game-container">
         <!-- Menu principal -->
         <div id="menu">
-            <h1>Cosmic Chickens: Galactic Run</h1>
-            <p>Guidez votre flotte de poulets cosmiques à travers les anneaux galactiques. Les anneaux bleus augmentent votre nombre, les rouges le diminuent!</p>
-            <p>Collectez des poulets de l'espace et devenez la plus grande flotte de la galaxie!</p>
-            <button id="start-button">Lancer la Mission</button>
+            <h1>Last War: Survival Game</h1>
+            <p>Dans un monde dévasté par la guerre, survivez face aux hordes d'ennemis en progressant à travers les zones de combat. Collectez des power-ups et améliorez vos capacités pour survivre plus longtemps.</p>
+            <p>Contrôles: utilisez le joystick ou swipez pour vous déplacer. Tir automatique quand un ennemi est à portée.</p>
+            <button id="start-button">COMMENCER LA MISSION</button>
         </div>
         
         <!-- Interface pendant le jeu -->
         <div id="ui">
-            <div class="stat">
-                <span class="stat-icon chicken-icon"></span>
-                Poulets Cosmiques: <span id="troops-count">1</span>
+            <div id="health-bar-container">
+                <div id="health-bar" class="ui-bar">
+                    <div id="health-bar-inner"></div>
+                </div>
             </div>
-            <div class="stat">
-                <span class="stat-icon fusion-icon"></span>
-                Taux de Fusion: x<span id="fusion-rate">1</span>
+            
+            <div id="score-container">
+                Score: <span id="score">0</span>
+            </div>
+            
+            <div id="wave-container">
+                <div id="wave-text">Vague 1/5</div>
+                <div id="wave-progress-bar" class="ui-bar">
+                    <div id="wave-progress-inner"></div>
+                </div>
+            </div>
+            
+            <div id="power-up-indicator"></div>
+        </div>
+        
+        <!-- Joystick pour mobile -->
+        <div id="joystick-container">
+            <div id="joystick">
+                <div id="joystick-knob"></div>
             </div>
         </div>
         
@@ -378,84 +469,19 @@
         <div id="game-over">
             <h1>MISSION ÉCHOUÉE</h1>
             <div id="final-stats">
-                <p>Poulets Cosmiques Totaux: <span id="final-score">0</span></p>
-                <p>Taux de Fusion Final: x<span id="final-fusion-rate">1</span></p>
+                <p>Score Final: <span id="final-score">0</span></p>
+                <p>Vague Atteinte: <span id="final-wave">1</span>/5</p>
             </div>
-            <button id="restart-button">Nouvelle Mission</button>
+            <button id="restart-button">NOUVELLE MISSION</button>
         </div>
         
         <!-- Écran pause -->
         <div id="pause-screen">
-            <h1>MISSION EN PAUSE</h1>
+            <h1>PAUSE</h1>
             <p>Appuyez sur P pour continuer</p>
         </div>
-        
-        <!-- Informations contrôles -->
-        <div id="controls-info">
-            Utilisez la souris pour diriger votre flotte | P = Pause
-        </div>
-        
-        <!-- Containers pour les effets visuels -->
-        <div id="effects-container"></div>
     </div>
 
     <script type="module" src="game.js"></script>
-
-    <!-- Script pour gérer les effets visuels -->
-    <script>
-        // Cette fonction sera appelée depuis game.js lors d'un bonus
-        window.showPositiveEffect = function() {
-            const container = document.getElementById('effects-container');
-            const flashElement = document.createElement('div');
-            flashElement.className = 'positive-flash';
-            container.appendChild(flashElement);
-            
-            // Supprimer l'élément après l'animation
-            setTimeout(() => {
-                container.removeChild(flashElement);
-            }, 600);
-        };
-        
-        // Cette fonction sera appelée depuis game.js lors d'un malus
-        window.showNegativeEffect = function() {
-            const container = document.getElementById('effects-container');
-            const flashElement = document.createElement('div');
-            flashElement.className = 'negative-flash';
-            container.appendChild(flashElement);
-            
-            // Supprimer l'élément après l'animation
-            setTimeout(() => {
-                container.removeChild(flashElement);
-            }, 600);
-        };
-        
-        // Simuler le chargement
-        window.addEventListener('DOMContentLoaded', function() {
-            const progressBar = document.getElementById('loading-progress');
-            let progress = 0;
-            
-            const interval = setInterval(() => {
-                progress += Math.random() * 5;
-                if (progress >= 100) {
-                    progress = 100;
-                    clearInterval(interval);
-                    
-                    // Vérifier si le jeu est prêt après le chargement de la barre
-                    checkGameLoaded();
-                }
-                progressBar.style.width = progress + '%';
-            }, 100);
-        });
-        
-        // Vérifier si le jeu est initialisé
-        function checkGameLoaded() {
-            let checkInterval = setInterval(function() {
-                if (window.gameInitialized) {
-                    clearInterval(checkInterval);
-                    document.getElementById('loader').style.display = 'none';
-                }
-            }, 100);
-        }
-    </script>
 </body>
 </html>
