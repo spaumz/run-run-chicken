@@ -23,6 +23,19 @@ let sunLight;
 let effectsToUpdate = [];
 let spaceDust = [];
 
+// Enemy variables
+let enemies = [];
+let enemyProjectiles = [];
+let lastEnemySpawnTime = 0;
+let enemySpawnRate = 3;
+let playerProjectiles = [];
+let lastFireTime = 0;
+let fireRate = 0.3;
+let bosses = [];
+let lastBossSpawnTime = 0;
+let bossSpawnRate = 60; // Spawns a boss every 60 seconds
+let killCount = 0;
+
 // Max troop visualization
 const MAX_TROOPS_DISPLAYED = 40;
 
@@ -122,15 +135,15 @@ function init() {
     
     updateLoadingProgress(20);
     
-    // Create camera with wide field of view for cosmic perspective
+    // Create camera with more top-down view like in the original game
     camera = new THREE.PerspectiveCamera(
-        75,
+        80,
         gameContainer.clientWidth / gameContainer.clientHeight,
         0.1,
         2000
     );
-    camera.position.set(0, 15, 10);
-    camera.lookAt(0, 0, -20);
+    camera.position.set(0, 25, 5); // Higher position and closer to player for more top-down view
+    camera.lookAt(0, 0, -10);
     
     updateLoadingProgress(30);
     
@@ -1528,12 +1541,12 @@ function updateTroops() {
 
 // Create cosmic portal (multiplier)
 function createPortal() {
-    // Define portal types
+    // Define portal types (corrected to make red portals positive and blue portals negative)
     const types = [
-        { op: "+", color: 0x00ddff, min: 1, max: 5, positive: true },    // Addition portal
-        { op: "-", color: 0xff3366, min: 1, max: 10, positive: false },  // Subtraction portal
-        { op: "×", color: 0x00ffaa, min: 2, max: 3, positive: true },    // Multiplication portal
-        { op: "÷", color: 0xff3366, min: 2, max: 3, positive: false }    // Division portal
+        { op: "+", color: 0xff3366, min: 1, max: 5, positive: true },    // Addition portal (red like in the image)
+        { op: "-", color: 0x00ddff, min: 1, max: 10, positive: false },  // Subtraction portal (blue)
+        { op: "×", color: 0xff3366, min: 2, max: 3, positive: true },    // Multiplication portal (red)
+        { op: "÷", color: 0x00ddff, min: 2, max: 3, positive: false }    // Division portal (blue)
     ];
     
     // Randomly select portal type with more chances for negative portals
@@ -2065,6 +2078,12 @@ function animate(time) {
             
             // Add hovering motion to leader too
             player.position.y = Math.sin(now * 3) * 0.2;
+            
+            // Automatic firing
+            if (now - lastFireTime > fireRate) {
+                firePlayerProjectile();
+                lastFireTime = now;
+            }
         }
         
         // Spawn portals
@@ -2074,6 +2093,21 @@ function animate(time) {
             
             // Gradually increase spawn rate with score
             portalSpawnRate = Math.max(0.8, 2 - (troops / 1000) * 0.5);
+        }
+        
+        // Spawn enemies
+        if (now - lastEnemySpawnTime > enemySpawnRate) {
+            lastEnemySpawnTime = now;
+            spawnRandomEnemy();
+            
+            // Gradually decrease spawn rate (more enemies as game progresses)
+            enemySpawnRate = Math.max(1, 3 - (timeElapsed / 60) * 0.5);
+        }
+        
+        // Spawn boss
+        if (now - lastBossSpawnTime > bossSpawnRate) {
+            lastBossSpawnTime = now;
+            spawnBoss();
         }
         
         // Update portals
@@ -2172,6 +2206,18 @@ function animate(time) {
             }
         }
         
+        // Update enemies
+        updateEnemies(now);
+        
+        // Update bosses
+        updateBosses(now);
+        
+        // Update player projectiles
+        updatePlayerProjectiles();
+        
+        // Update enemy projectiles
+        updateEnemyProjectiles();
+        
         // Update mouse cursor
         if (mouseCursor) {
             mouseCursor.position.z = 5;
@@ -2198,6 +2244,1865 @@ function animate(time) {
     }
     
     renderer.render(scene, camera);
+}
+
+// Create an enemy
+function createEnemy(type) {
+    const enemyGroup = new THREE.Group();
+    let enemyMesh;
+    
+    switch(type) {
+        case 'laser':
+            // Laser shooter enemy
+            const bodyMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff3366,
+                emissive: 0x661122,
+                shininess: 80
+            });
+            
+            // Main body
+            enemyMesh = new THREE.Mesh(
+                new THREE.TetrahedronGeometry(2, 0),
+                bodyMaterial
+            );
+            enemyMesh.rotation.x = Math.PI;
+            enemyGroup.add(enemyMesh);
+            
+            // Laser cannon
+            const cannonMaterial = new THREE.MeshPhongMaterial({
+                color: 0x333333,
+                emissive: 0x111111,
+                shininess: 90
+            });
+            
+            const cannon = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.5, 1.5, 8),
+                cannonMaterial
+            );
+            cannon.position.set(0, 0, 1.5);
+            enemyGroup.add(cannon);
+            
+            // Energy core
+            const coreMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const core = new THREE.Mesh(
+                new THREE.SphereGeometry(0.6, 8, 8),
+                coreMaterial
+            );
+            core.position.set(0, 0, 0);
+            enemyGroup.add(core);
+            
+            // Add pulsing effect to core
+            effectsToUpdate.push({
+                type: 'enemyCore',
+                mesh: core,
+                time: Math.random() * Math.PI * 2,
+                update: function() {
+                    if (gamePaused) return true;
+                    
+                    this.time += 0.1;
+                    this.mesh.scale.set(
+                        1 + Math.sin(this.time) * 0.2,
+                        1 + Math.sin(this.time) * 0.2,
+                        1 + Math.sin(this.time) * 0.2
+                    );
+                    
+                    return true;
+                }
+            });
+            
+            // Set properties
+            enemyGroup.enemyType = 'laser';
+            enemyGroup.fireRate = 1.5;
+            enemyGroup.lastFire = 0;
+            enemyGroup.health = 3;
+            enemyGroup.speed = 0.1;
+            enemyGroup.score = 100;
+            break;
+            
+        case 'dust':
+            // Star dust shooter
+            const dustBodyMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00aaff,
+                emissive: 0x003366,
+                shininess: 70
+            });
+            
+            // Main body (nebula-like shape)
+            enemyMesh = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(2, 1),
+                dustBodyMaterial
+            );
+            
+            // Distort vertices for more nebula-like shape
+            const positions = enemyMesh.geometry.attributes.position;
+            for (let v = 0; v < positions.count; v++) {
+                positions.setXYZ(
+                    v,
+                    positions.getX(v) * (0.8 + Math.random() * 0.4),
+                    positions.getY(v) * (0.8 + Math.random() * 0.4),
+                    positions.getZ(v) * (0.8 + Math.random() * 0.4)
+                );
+            }
+            enemyMesh.geometry.computeVertexNormals();
+            
+            enemyGroup.add(enemyMesh);
+            
+            // Add dust particle effect
+            const particleCount = 30;
+            const particleGeometry = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                const radius = Math.random() * 3;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                
+                particlePositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                particlePositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                particlePositions[i3 + 2] = radius * Math.cos(phi);
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x33ccff,
+                size: 0.3,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            enemyGroup.add(particles);
+            
+            // Animate particles
+            effectsToUpdate.push({
+                type: 'dustParticles',
+                geometry: particleGeometry,
+                time: 0,
+                update: function() {
+                    if (gamePaused) return true;
+                    
+                    this.time += 0.02;
+                    
+                    const positions = this.geometry.attributes.position.array;
+                    
+                    for (let i = 0; i < particleCount; i++) {
+                        const i3 = i * 3;
+                        
+                        // Create swirling motion
+                        const x = positions[i3];
+                        const y = positions[i3 + 1];
+                        const z = positions[i3 + 2];
+                        
+                        const distance = Math.sqrt(x*x + y*y + z*z);
+                        
+                        // Calculate new position with swirl
+                        positions[i3] = x * Math.cos(this.time * 0.5) - y * Math.sin(this.time * 0.5);
+                        positions[i3 + 1] = x * Math.sin(this.time * 0.5) + y * Math.cos(this.time * 0.5);
+                    }
+                    
+                    this.geometry.attributes.position.needsUpdate = true;
+                    
+                    return true;
+                }
+            });
+            
+            // Set properties
+            enemyGroup.enemyType = 'dust';
+            enemyGroup.fireRate = 2.0;
+            enemyGroup.lastFire = 0;
+            enemyGroup.health = 2;
+            enemyGroup.speed = 0.15;
+            enemyGroup.score = 75;
+            break;
+            
+        case 'bomber':
+            // Bomb dropper enemy
+            const bomberMaterial = new THREE.MeshPhongMaterial({
+                color: 0xffaa22,
+                emissive: 0x553311,
+                shininess: 60
+            });
+            
+            // Main body (UFO shape)
+            const ufoTop = new THREE.Mesh(
+                new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+                bomberMaterial
+            );
+            ufoTop.rotation.x = Math.PI;
+            enemyGroup.add(ufoTop);
+            
+            const ufoBottom = new THREE.Mesh(
+                new THREE.ConeGeometry(1.5, 0.8, 16),
+                bomberMaterial
+            );
+            ufoBottom.position.set(0, -0.4, 0);
+            enemyGroup.add(ufoBottom);
+            
+            // Cockpit
+            const cockpitMaterial = new THREE.MeshPhongMaterial({
+                color: 0x88ddff,
+                transparent: true,
+                opacity: 0.7,
+                shininess: 100
+            });
+            
+            const cockpit = new THREE.Mesh(
+                new THREE.SphereGeometry(0.7, 16, 16),
+                cockpitMaterial
+            );
+            cockpit.position.set(0, 0.5, 0);
+            enemyGroup.add(cockpit);
+            
+            // Bomb bay
+            const bombBayMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const bombBay = new THREE.Mesh(
+                new THREE.CircleGeometry(0.3, 8),
+                bombBayMaterial
+            );
+            bombBay.rotation.x = Math.PI / 2;
+            bombBay.position.set(0, -0.8, 0);
+            enemyGroup.add(bombBay);
+            
+            // Set properties
+            enemyGroup.enemyType = 'bomber';
+            enemyGroup.fireRate = 3.0;
+            enemyGroup.lastFire = 0;
+            enemyGroup.health = 4;
+            enemyGroup.speed = 0.08;
+            enemyGroup.score = 150;
+            break;
+            
+        case 'swarmer':
+            // Swarm mini enemies
+            const swarmerMaterial = new THREE.MeshPhongMaterial({
+                color: 0x22ff88,
+                emissive: 0x115533,
+                shininess: 70
+            });
+            
+            // Small body
+            enemyMesh = new THREE.Mesh(
+                new THREE.OctahedronGeometry(1, 0),
+                swarmerMaterial
+            );
+            enemyGroup.add(enemyMesh);
+            
+            // Wings
+            const wingMaterial = new THREE.MeshPhongMaterial({
+                color: 0x33aa66,
+                emissive: 0x115533,
+                transparent: true,
+                opacity: 0.8,
+                shininess: 60
+            });
+            
+            const leftWing = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.5, 0.8),
+                wingMaterial
+            );
+            leftWing.position.set(-1, 0, 0);
+            leftWing.rotation.y = Math.PI / 4;
+            enemyGroup.add(leftWing);
+            
+            const rightWing = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.5, 0.8),
+                wingMaterial
+            );
+            rightWing.position.set(1, 0, 0);
+            rightWing.rotation.y = -Math.PI / 4;
+            enemyGroup.add(rightWing);
+            
+            // Animate wings
+            effectsToUpdate.push({
+                type: 'swarmerWings',
+                leftWing: leftWing,
+                rightWing: rightWing,
+                time: Math.random() * Math.PI * 2,
+                update: function() {
+                    if (gamePaused) return true;
+                    
+                    this.time += 0.2;
+                    
+                    this.leftWing.rotation.z = Math.sin(this.time) * 0.3;
+                    this.rightWing.rotation.z = -Math.sin(this.time) * 0.3;
+                    
+                    return true;
+                }
+            });
+            
+            // Set properties
+            enemyGroup.enemyType = 'swarmer';
+            enemyGroup.fireRate = 0; // Doesn't shoot, just rams
+            enemyGroup.health = 1;
+            enemyGroup.speed = 0.3;
+            enemyGroup.score = 50;
+            break;
+    }
+    
+    // Random position
+    const x = Math.random() * 28 - 14; // Between -14 and 14
+    enemyGroup.position.set(x, 3, -100);
+    
+    // Add to scene and enemies array
+    scene.add(enemyGroup);
+    enemies.push(enemyGroup);
+    
+    return enemyGroup;
+}
+
+// Spawn a random enemy
+function spawnRandomEnemy() {
+    const enemyTypes = ['laser', 'dust', 'bomber', 'swarmer'];
+    const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    
+    return createEnemy(randomType);
+}
+
+// Update enemies
+function updateEnemies(now) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+        
+        // Move enemy
+        enemy.position.z += enemy.speed;
+        
+        // Add some lateral movement for certain types
+        if (enemy.enemyType === 'swarmer' || enemy.enemyType === 'dust') {
+            enemy.position.x += Math.sin(now * 2 + i) * 0.05;
+        }
+        
+        // Enemy firing
+        if (enemy.fireRate > 0 && now - enemy.lastFire > enemy.fireRate) {
+            enemyFire(enemy, now);
+            enemy.lastFire = now;
+        }
+        
+        // Check if enemy passed the player
+        if (enemy.position.z > 15) {
+            scene.remove(enemy);
+            enemies.splice(i, 1);
+            continue;
+        }
+        
+        // Check for collision with player projectiles
+        for (let j = playerProjectiles.length - 1; j >= 0; j--) {
+            const projectile = playerProjectiles[j];
+            
+            // Simple distance check for collision
+            const dx = projectile.position.x - enemy.position.x;
+            const dy = projectile.position.y - enemy.position.y;
+            const dz = projectile.position.z - enemy.position.z;
+            const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            
+            if (distance < 3) { // Collision detected
+                enemy.health--;
+                
+                // Create hit effect
+                createHitEffect(projectile.position.x, projectile.position.y, projectile.position.z);
+                
+                // Remove projectile
+                scene.remove(projectile);
+                playerProjectiles.splice(j, 1);
+                
+                // Check if enemy is destroyed
+                if (enemy.health <= 0) {
+                    // Create explosion effect
+                    createExplosionEffect(enemy.position.x, enemy.position.y, enemy.position.z);
+                    
+                    // Remove enemy
+                    scene.remove(enemy);
+                    enemies.splice(i, 1);
+                    
+                    // Increase score/kill count
+                    killCount += 1;
+                    
+                    // Random chance to drop a reward
+                    if (Math.random() < 0.2) {
+                        createReward(enemy.position.x, enemy.position.z);
+                    }
+                    
+                    break;
+                }
+            }
+        }
+        
+        // Check for collision with player (only for swarmers)
+        if (enemy.enemyType === 'swarmer' && player) {
+            const dx = player.position.x - enemy.position.x;
+            const dy = player.position.y - enemy.position.y;
+            const dz = player.position.z - enemy.position.z;
+            const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            
+            if (distance < 3) { // Collision detected
+                // Remove highest level troop
+                killHighestLevelTroop();
+                
+                // Create explosion
+                createExplosionEffect(enemy.position.x, enemy.position.y, enemy.position.z);
+                
+                // Remove enemy
+                scene.remove(enemy);
+                enemies.splice(i, 1);
+                
+                break;
+            }
+        }
+    }
+}
+
+// Enemy firing function
+function enemyFire(enemy, now) {
+    switch(enemy.enemyType) {
+        case 'laser':
+            // Create laser beam
+            const laserGeometry = new THREE.CylinderGeometry(0.2, 0.2, 10, 8);
+            const laserMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff0000,
+                transparent: true,
+                opacity: 0.7
+            });
+            
+            const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+            laser.rotation.x = Math.PI / 2;
+            laser.position.set(enemy.position.x, enemy.position.y, enemy.position.z + 5);
+            
+            scene.add(laser);
+            
+            // Add to projectiles array
+            enemyProjectiles.push({
+                mesh: laser,
+                type: 'laser',
+                speed: 0.6,
+                damage: 1,
+                lifespan: 2 // Seconds before disappearing
+            });
+            
+            // Add laser glow effect
+            const glowGeometry = new THREE.CylinderGeometry(0.4, 0.4, 10, 8);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6666,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.BackSide
+            });
+            
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.rotation.x = Math.PI / 2;
+            glow.position.set(enemy.position.x, enemy.position.y, enemy.position.z + 5);
+            
+            scene.add(glow);
+            enemyProjectiles.push({
+                mesh: glow,
+                type: 'glow',
+                speed: 0.6,
+                damage: 0, // Glow doesn't damage
+                lifespan: 2
+            });
+            break;
+            
+        case 'dust':
+            // Create dust cloud
+            const dustCloud = new THREE.Group();
+            
+            // Particle system for dust
+            const particleCount = 50;
+            const particleGeometry = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                
+                // Position particles in a small cluster
+                particlePositions[i3] = (Math.random() - 0.5) * 3;
+                particlePositions[i3 + 1] = (Math.random() - 0.5) * 3;
+                particlePositions[i3 + 2] = (Math.random() - 0.5) * 3;
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x00ddff,
+                size: 0.3,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            dustCloud.add(particles);
+            
+            // Position the dust cloud
+            dustCloud.position.set(enemy.position.x, enemy.position.y, enemy.position.z + 2);
+            
+            scene.add(dustCloud);
+            
+            // Add to projectiles array
+            enemyProjectiles.push({
+                mesh: dustCloud,
+                type: 'dust',
+                speed: 0.3,
+                damage: 1,
+                lifespan: 4,
+                geometry: particleGeometry, // For animation
+                expanding: true
+            });
+            break;
+            
+        case 'bomber':
+            // Create bomb
+            const bombGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+            const bombMaterial = new THREE.MeshPhongMaterial({
+                color: 0xff6600,
+                emissive: 0xaa3300,
+                shininess: 60
+            });
+            
+            const bomb = new THREE.Mesh(bombGeometry, bombMaterial);
+            bomb.position.set(enemy.position.x, enemy.position.y - 1, enemy.position.z + 1);
+            
+            scene.add(bomb);
+            
+            // Add to projectiles array
+            enemyProjectiles.push({
+                mesh: bomb,
+                type: 'bomb',
+                speed: 0.2,
+                damage: 2,
+                lifespan: 6,
+                pulseTime: 0
+            });
+            break;
+    }
+}
+
+// Update enemy projectiles
+function updateEnemyProjectiles() {
+    for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+        const projectile = enemyProjectiles[i];
+        
+        // Move projectile
+        projectile.mesh.position.z += projectile.speed;
+        
+        // Special behavior based on type
+        switch(projectile.type) {
+            case 'dust':
+                if (projectile.expanding) {
+                    // Expand dust cloud
+                    const positions = projectile.geometry.attributes.position.array;
+                    
+                    for (let j = 0; j < positions.length; j += 3) {
+                        // Move particles outward
+                        const x = positions[j];
+                        const y = positions[j + 1];
+                        const z = positions[j + 2];
+                        
+                        const distance = Math.sqrt(x*x + y*y + z*z);
+                        
+                        if (distance < 8) {
+                            const factor = 1.02;
+                            positions[j] *= factor;
+                            positions[j + 1] *= factor;
+                            positions[j + 2] *= factor;
+                        }
+                    }
+                    
+                    projectile.geometry.attributes.position.needsUpdate = true;
+                }
+                break;
+                
+            case 'bomb':
+                // Pulsating bomb
+                projectile.pulseTime += 0.1;
+                const scale = 1 + Math.sin(projectile.pulseTime) * 0.2;
+                projectile.mesh.scale.set(scale, scale, scale);
+                
+                // Bombs fall slightly
+                projectile.mesh.position.y -= 0.02;
+                break;
+        }
+        
+        // Check if projectile has reached screen middle
+        if (projectile.mesh.position.z > 0) {
+            // Check for collision with player
+            if (player && projectile.damage > 0) {
+                const dx = projectile.mesh.position.x - player.position.x;
+                const dy = projectile.mesh.position.y - player.position.y;
+                const dz = projectile.mesh.position.z - player.position.z;
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                // Different collision radius based on projectile type
+                let collisionRadius = 2;
+                if (projectile.type === 'dust') collisionRadius = 4;
+                if (projectile.type === 'bomb') collisionRadius = 3;
+                
+                if (distance < collisionRadius) {
+                    // Player hit
+                    killHighestLevelTroop();
+                    
+                    // Create hit effect
+                    createHitEffect(player.position.x, player.position.y, player.position.z);
+                    
+                    // Remove projectile
+                    scene.remove(projectile.mesh);
+                    enemyProjectiles.splice(i, 1);
+                    continue;
+                }
+            }
+        }
+        
+        // Remove projectile if it goes too far
+        if (projectile.mesh.position.z > 20) {
+            scene.remove(projectile.mesh);
+            enemyProjectiles.splice(i, 1);
+        }
+    }
+}
+
+// Create boss enemy
+function createBoss() {
+    const bossGroup = new THREE.Group();
+    
+    // Main body material
+    const bossMaterial = new THREE.MeshPhongMaterial({
+        color: 0x9933ff,
+        emissive: 0x441177,
+        shininess: 100
+    });
+    
+    // Create main body (large mothership)
+    const mainBody = new THREE.Mesh(
+        new THREE.CylinderGeometry(6, 8, 3, 12, 1, false),
+        bossMaterial
+    );
+    mainBody.rotation.x = Math.PI / 2;
+    bossGroup.add(mainBody);
+    
+    // Top dome
+    const topDome = new THREE.Mesh(
+        new THREE.SphereGeometry(6, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        bossMaterial
+    );
+    topDome.position.set(0, 1.5, 0);
+    bossGroup.add(topDome);
+    
+    // Bottom details
+    const bottomDetails = new THREE.Mesh(
+        new THREE.TorusGeometry(7, 1, 8, 12),
+        bossMaterial
+    );
+    bottomDetails.rotation.x = Math.PI / 2;
+    bottomDetails.position.set(0, -1.5, 0);
+    bossGroup.add(bottomDetails);
+    
+    // Engine glow
+    const engineMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff00ff,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    // Create engines
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const engine = new THREE.Mesh(
+            new THREE.SphereGeometry(1, 8, 8),
+            engineMaterial
+        );
+        
+        engine.position.set(
+            Math.cos(angle) * 7,
+            -1.5,
+            Math.sin(angle) * 7
+        );
+        bossGroup.add(engine);
+        
+        // Add engine glow effect
+        effectsToUpdate.push({
+            type: 'bossEngine',
+            mesh: engine,
+            time: Math.random() * Math.PI * 2,
+            update: function() {
+                if (gamePaused) return true;
+                
+                this.time += 0.1;
+                this.mesh.scale.set(
+                    1 + Math.sin(this.time) * 0.3,
+                    1 + Math.sin(this.time) * 0.3,
+                    1 + Math.sin(this.time) * 0.3
+                );
+                
+                return true;
+            }
+        });
+    }
+    
+    // Weapon turrets
+    const turretMaterial = new THREE.MeshPhongMaterial({
+        color: 0xbb44ff,
+        emissive: 0x220033,
+        shininess: 80
+    });
+    
+    // Main cannon
+    const mainCannon = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.2, 1.5, 3, 8),
+        turretMaterial
+    );
+    mainCannon.rotation.x = Math.PI / 2;
+    mainCannon.position.set(0, 0, 4);
+    bossGroup.add(mainCannon);
+    
+    // Side turrets
+    for (let i = 0; i < 4; i++) {
+        const angle = (i / 4) * Math.PI * 2;
+        const turret = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.6, 0.8, 2, 8),
+            turretMaterial
+        );
+        
+        turret.position.set(
+            Math.cos(angle) * 5,
+            0,
+            Math.sin(angle) * 5 + 2 // Slightly forward
+        );
+        turret.rotation.x = Math.PI / 2;
+        turret.rotation.z = angle;
+        bossGroup.add(turret);
+    }
+    
+    // Add shield energy field
+    const shieldMaterial = new THREE.MeshBasicMaterial({
+        color: 0xaa77ff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+    });
+    
+    const shield = new THREE.Mesh(
+        new THREE.SphereGeometry(10, 16, 16),
+        shieldMaterial
+    );
+    bossGroup.add(shield);
+    
+    // Position boss
+    bossGroup.position.set(0, 5, -120);
+    
+    // Set boss properties
+    bossGroup.bossType = 'mothership';
+    bossGroup.health = 50;
+    bossGroup.maxHealth = 50;
+    bossGroup.speed = 0.05;
+    bossGroup.targetX = 0;
+    bossGroup.moveTime = 0;
+    bossGroup.fireTime = 0;
+    bossGroup.phaseTime = 0;
+    bossGroup.currentPhase = 0;
+    bossGroup.shieldActive = true;
+    bossGroup.shield = shield;
+    bossGroup.score = 1000;
+    
+    // Add to scene and bosses array
+    scene.add(bossGroup);
+    bosses.push(bossGroup);
+    
+    return bossGroup;
+}
+
+// Spawn boss
+function spawnBoss() {
+    return createBoss();
+}
+
+// Update bosses
+function updateBosses(now) {
+    for (let i = bosses.length - 1; i >= 0; i--) {
+        const boss = bosses[i];
+        
+        // Boss entry movement
+        if (boss.position.z < -50) {
+            boss.position.z += boss.speed * 2;
+            continue;
+        }
+        
+        // Update boss phase timer
+        boss.phaseTime += 0.01;
+        if (boss.phaseTime > 10) {
+            boss.phaseTime = 0;
+            boss.currentPhase = (boss.currentPhase + 1) % 3; // Cycle through 3 phases
+        }
+        
+        // Boss movement
+        boss.moveTime += 0.01;
+        if (boss.moveTime > 3) {
+            boss.moveTime = 0;
+            boss.targetX = Math.random() * 20 - 10; // New random target
+        }
+        
+        // Move towards target
+        boss.position.x += (boss.targetX - boss.position.x) * 0.01;
+        
+        // Gentle bobbing motion
+        boss.position.y = 5 + Math.sin(now) * 0.5;
+        
+        // Boss firing based on current phase
+        boss.fireTime += 0.01;
+        
+        switch(boss.currentPhase) {
+            case 0: // Laser barrage phase
+                if (boss.fireTime > 0.2) {
+                    boss.fireTime = 0;
+                    bossFire(boss, 'laser');
+                }
+                break;
+                
+            case 1: // Missile phase
+                if (boss.fireTime > 0.8) {
+                    boss.fireTime = 0;
+                    bossFire(boss, 'missile');
+                }
+                break;
+                
+            case 2: // Wave attack phase
+                if (boss.fireTime > 0.5) {
+                    boss.fireTime = 0;
+                    bossFire(boss, 'wave');
+                }
+                break;
+        }
+        
+        // Shield animation
+        if (boss.shieldActive) {
+            boss.shield.rotation.y += 0.01;
+            boss.shield.rotation.x += 0.005;
+        }
+        
+        // Check for collision with player projectiles
+        for (let j = playerProjectiles.length - 1; j >= 0; j--) {
+            const projectile = playerProjectiles[j];
+            
+            // Simple distance check for collision
+            const dx = projectile.position.x - boss.position.x;
+            const dy = projectile.position.y - boss.position.y;
+            const dz = projectile.position.z - boss.position.z;
+            const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            
+            if (distance < 10) { // Hit shield or boss
+                // Create hit effect
+                createHitEffect(projectile.position.x, projectile.position.y, projectile.position.z);
+                
+                // Remove projectile
+                scene.remove(projectile);
+                playerProjectiles.splice(j, 1);
+                
+                // If shield is active, reduce shield instead of health
+                if (boss.shieldActive) {
+                    boss.shield.material.opacity -= 0.01;
+                    
+                    // Deactivate shield if it becomes too weak
+                    if (boss.shield.material.opacity < 0.05) {
+                        boss.shieldActive = false;
+                        boss.shield.visible = false;
+                    }
+                } else {
+                    // No shield, reduce health
+                    boss.health--;
+                    
+                    // Check if boss is defeated
+                    if (boss.health <= 0) {
+                        // Create big explosion effect
+                        for (let k = 0; k < 5; k++) {
+                            setTimeout(() => {
+                                if (boss.parent) { // Check if still in scene
+                                    createExplosionEffect(
+                                        boss.position.x + (Math.random() - 0.5) * 10,
+                                        boss.position.y + (Math.random() - 0.5) * 5,
+                                        boss.position.z + (Math.random() - 0.5) * 10,
+                                        2 // Bigger explosions
+                                    );
+                                }
+                            }, k * 200);
+                        }
+                        
+                        // Remove boss after all explosions
+                        setTimeout(() => {
+                            scene.remove(boss);
+                            bosses.splice(i, 1);
+                            
+                            // Give multiple rewards
+                            for (let k = 0; k < 3; k++) {
+                                createReward(
+                                    boss.position.x + (Math.random() - 0.5) * 10,
+                                    boss.position.z
+                                );
+                            }
+                            
+                            // Increase score/killCount
+                            killCount += 5;
+                        }, 1000);
+                        
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Boss firing function
+function bossFire(boss, attackType) {
+    switch(attackType) {
+        case 'laser':
+            // Fire lasers from all turrets
+            const positions = [
+                [0, 0, 4], // Main cannon
+                [5, 0, 2], // Right
+                [-5, 0, 2], // Left
+                [0, 5, 2], // Top
+                [0, -5, 2]  // Bottom
+            ];
+            
+            for (let i = 0; i < positions.length; i++) {
+                // Adjust positions relative to boss
+                const x = boss.position.x + positions[i][0];
+                const y = boss.position.y + positions[i][1];
+                const z = boss.position.z + positions[i][2];
+                
+                // Create laser
+                const laserGeometry = new THREE.CylinderGeometry(0.3, 0.3, 15, 8);
+                const laserMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff00ff,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                
+                const laser = new THREE.Mesh(laserGeometry, laserMaterial);
+                laser.rotation.x = Math.PI / 2;
+                laser.position.set(x, y, z + 7.5);
+                
+                scene.add(laser);
+                
+                // Add to projectiles array
+                enemyProjectiles.push({
+                    mesh: laser,
+                    type: 'bossLaser',
+                    speed: 0.8,
+                    damage: 1,
+                    lifespan: 2
+                });
+            }
+            break;
+            
+        case 'missile':
+            // Fire homing missiles
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2;
+                
+                // Create missile
+                const missileGroup = new THREE.Group();
+                
+                // Missile body
+                const missileMaterial = new THREE.MeshPhongMaterial({
+                    color: 0xdddddd,
+                    emissive: 0x444444,
+                    shininess: 80
+                });
+                
+                const body = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.3, 0.5, 2, 8),
+                    missileMaterial
+                );
+                body.rotation.x = Math.PI / 2;
+                missileGroup.add(body);
+                
+                // Missile fins
+                for (let j = 0; j < 4; j++) {
+                    const finAngle = (j / 4) * Math.PI * 2;
+                    
+                    const fin = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.1, 0.5, 0.5),
+                        missileMaterial
+                    );
+                    
+                    fin.position.set(
+                        Math.cos(finAngle) * 0.5,
+                        Math.sin(finAngle) * 0.5,
+                        -0.5
+                    );
+                    
+                    fin.rotation.z = finAngle;
+                    missileGroup.add(fin);
+                }
+                
+                // Thruster glow
+                const thrusterMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xff8800,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                
+                const thruster = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.3, 1, 8),
+                    thrusterMaterial
+                );
+                thruster.rotation.x = -Math.PI / 2;
+                thruster.position.z = -1.5;
+                missileGroup.add(thruster);
+                
+                // Position missile
+                const x = boss.position.x + Math.cos(angle) * 7;
+                const y = boss.position.y + Math.sin(angle) * 7;
+                const z = boss.position.z + 2;
+                
+                missileGroup.position.set(x, y, z);
+                
+                scene.add(missileGroup);
+                
+                // Add to projectiles array with homing behavior
+                enemyProjectiles.push({
+                    mesh: missileGroup,
+                    type: 'bossMissile',
+                    speed: 0.3,
+                    damage: 2,
+                    lifespan: 10,
+                    homing: true,
+                    turnSpeed: 0.03
+                });
+            }
+            break;
+            
+        case 'wave':
+            // Create energy wave
+            const waveGeometry = new THREE.RingGeometry(1, 2, 32);
+            const waveMaterial = new THREE.MeshBasicMaterial({
+                color: 0xaa00ff,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const wave = new THREE.Mesh(waveGeometry, waveMaterial);
+            wave.rotation.x = Math.PI / 2;
+            wave.position.set(boss.position.x, boss.position.y, boss.position.z + 2);
+            
+            scene.add(wave);
+            
+            // Add to projectiles array with expanding behavior
+            enemyProjectiles.push({
+                mesh: wave,
+                type: 'bossWave',
+                speed: 0.4,
+                damage: 1,
+                lifespan: 5,
+                expandRate: 0.5,
+                initialOpacity: 0.7
+            });
+            break;
+    }
+}
+
+// Create player projectile
+function firePlayerProjectile() {
+    if (!player || troopMeshes.length === 0) return;
+    
+    // Create egg-shaped projectile
+    const projectileGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+    const projectileMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        emissive: 0x88aaff
+    });
+    
+    const projectile = new THREE.Mesh(projectileGeometry, projectileMaterial);
+    
+    // Position at player's location
+    projectile.position.set(player.position.x, player.position.y + 0.5, player.position.z - 1);
+    
+    // Add glow effect
+    const glowGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x44aaff,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.BackSide
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    projectile.add(glow);
+    
+    // Add trail effect
+    const trailGeometry = new THREE.BoxGeometry(0.1, 0.1, 1);
+    const trailMaterial = new THREE.MeshBasicMaterial({
+        color: 0x88ccff,
+        transparent: true,
+        opacity: 0.6
+    });
+    
+    const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+    trail.position.z = 0.5;
+    projectile.add(trail);
+    
+    scene.add(projectile);
+    playerProjectiles.push(projectile);
+    
+    // Play sound effect
+    playSound('laser', { volume: 0.2 });
+    
+    return projectile;
+}
+
+// Update player projectiles
+function updatePlayerProjectiles() {
+    for (let i = playerProjectiles.length - 1; i >= 0; i--) {
+        const projectile = playerProjectiles[i];
+        
+        // Move projectile forward
+        projectile.position.z -= 1.0;
+        
+        // Remove if it goes too far
+        if (projectile.position.z < -100) {
+            scene.remove(projectile);
+            playerProjectiles.splice(i, 1);
+        }
+    }
+}
+
+// Create hit effect
+function createHitEffect(x, y, z) {
+    // Create flash
+    const flashGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.set(x, y, z);
+    scene.add(flash);
+    
+    // Create sparks
+    const sparksCount = 20;
+    const sparksGeometry = new THREE.BufferGeometry();
+    const sparksPositions = new Float32Array(sparksCount * 3);
+    const sparksVelocities = [];
+    
+    for (let i = 0; i < sparksCount; i++) {
+        const i3 = i * 3;
+        sparksPositions[i3] = x;
+        sparksPositions[i3 + 1] = y;
+        sparksPositions[i3 + 2] = z;
+        
+        // Random velocity
+        const speed = 0.1 + Math.random() * 0.1;
+        const angle = Math.random() * Math.PI * 2;
+        const elevation = Math.random() * Math.PI - Math.PI / 2;
+        
+        sparksVelocities.push({
+            x: Math.cos(angle) * Math.cos(elevation) * speed,
+            y: Math.sin(elevation) * speed,
+            z: Math.sin(angle) * Math.cos(elevation) * speed
+        });
+    }
+    
+    sparksGeometry.setAttribute('position', new THREE.BufferAttribute(sparksPositions, 3));
+    
+    const sparksMaterial = new THREE.PointsMaterial({
+        color: 0xffaa00,
+        size: 0.1,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const sparks = new THREE.Points(sparksGeometry, sparksMaterial);
+    scene.add(sparks);
+    
+    // Animation effect
+    const hitEffect = {
+        flash: flash,
+        sparks: sparks,
+        geometry: sparksGeometry,
+        velocities: sparksVelocities,
+        life: 20,
+        update: function() {
+            if (gamePaused) return true;
+            
+            // Grow and fade flash
+            this.flash.scale.multiplyScalar(1.1);
+            this.flash.material.opacity *= 0.9;
+            
+            // Update sparks
+            const positions = this.geometry.attributes.position.array;
+            
+            for (let i = 0; i < sparksCount; i++) {
+                const i3 = i * 3;
+                const vel = this.velocities[i];
+                
+                positions[i3] += vel.x;
+                positions[i3 + 1] += vel.y;
+                positions[i3 + 2] += vel.z;
+                
+                // Add gravity
+                vel.y -= 0.005;
+            }
+            
+            this.geometry.attributes.position.needsUpdate = true;
+            
+            // Fade sparks
+            this.sparks.material.opacity = this.life / 20;
+            
+            // Decrease life
+            this.life--;
+            
+            // Remove when done
+            if (this.life <= 0) {
+                scene.remove(this.flash);
+                scene.remove(this.sparks);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(hitEffect);
+    
+    return hitEffect;
+}
+
+// Create explosion effect
+function createExplosionEffect(x, y, z, scale = 1) {
+    // Create flash sphere
+    const flashGeometry = new THREE.SphereGeometry(1 * scale, 16, 16);
+    const flashMaterial = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+    flash.position.set(x, y, z);
+    scene.add(flash);
+    
+    // Create fire sphere
+    const fireGeometry = new THREE.SphereGeometry(0.8 * scale, 16, 16);
+    const fireMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff6600,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const fire = new THREE.Mesh(fireGeometry, fireMaterial);
+    fire.position.set(x, y, z);
+    scene.add(fire);
+    
+    // Create sparks
+    const sparksCount = 30 * scale;
+    const sparksGeometry = new THREE.BufferGeometry();
+    const sparksPositions = new Float32Array(sparksCount * 3);
+    const sparksVelocities = [];
+    
+    for (let i = 0; i < sparksCount; i++) {
+        const i3 = i * 3;
+        sparksPositions[i3] = x;
+        sparksPositions[i3 + 1] = y;
+        sparksPositions[i3 + 2] = z;
+        
+        // Random velocity
+        const speed = (0.1 + Math.random() * 0.2) * scale;
+        const angle = Math.random() * Math.PI * 2;
+        const elevation = Math.random() * Math.PI - Math.PI / 2;
+        
+        sparksVelocities.push({
+            x: Math.cos(angle) * Math.cos(elevation) * speed,
+            y: Math.sin(elevation) * speed,
+            z: Math.sin(angle) * Math.cos(elevation) * speed
+        });
+    }
+    
+    sparksGeometry.setAttribute('position', new THREE.BufferAttribute(sparksPositions, 3));
+    
+    const sparksMaterial = new THREE.PointsMaterial({
+        color: 0xff8800,
+        size: 0.1 * scale,
+        transparent: true,
+        opacity: 0.8
+    });
+    
+    const sparks = new THREE.Points(sparksGeometry, sparksMaterial);
+    scene.add(sparks);
+    
+    // Create smoke
+    const smokeCount = 20 * scale;
+    const smokeGeometry = new THREE.BufferGeometry();
+    const smokePositions = new Float32Array(smokeCount * 3);
+    const smokeVelocities = [];
+    
+    for (let i = 0; i < smokeCount; i++) {
+        const i3 = i * 3;
+        smokePositions[i3] = x;
+        smokePositions[i3 + 1] = y;
+        smokePositions[i3 + 2] = z;
+        
+        // Random velocity
+        const speed = (0.05 + Math.random() * 0.05) * scale;
+        const angle = Math.random() * Math.PI * 2;
+        const elevation = Math.random() * Math.PI - Math.PI / 2;
+        
+        smokeVelocities.push({
+            x: Math.cos(angle) * Math.cos(elevation) * speed,
+            y: Math.sin(elevation) * speed * 2, // Smoke rises faster
+            z: Math.sin(angle) * Math.cos(elevation) * speed
+        });
+    }
+    
+    smokeGeometry.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
+    
+    const smokeMaterial = new THREE.PointsMaterial({
+        color: 0x666666,
+        size: 0.3 * scale,
+        transparent: true,
+        opacity: 0.4
+    });
+    
+    const smoke = new THREE.Points(smokeGeometry, smokeMaterial);
+    scene.add(smoke);
+    
+    // Play explosion sound
+    playSound('explosion', { volume: 0.4 });
+    
+    // Animation effect
+    const explosionEffect = {
+        flash: flash,
+        fire: fire,
+        sparks: sparks,
+        smoke: smoke,
+        sparksGeometry: sparksGeometry,
+        smokeGeometry: smokeGeometry,
+        sparksVelocities: sparksVelocities,
+        smokeVelocities: smokeVelocities,
+        life: 40,
+        update: function() {
+            if (gamePaused) return true;
+            
+            // Grow and fade flash
+            this.flash.scale.multiplyScalar(1.1);
+            this.flash.material.opacity *= 0.9;
+            
+            // Grow and fade fire
+            this.fire.scale.multiplyScalar(1.05);
+            this.fire.material.opacity = Math.max(0, this.fire.material.opacity - 0.02);
+            
+            // Update sparks
+            const sparksPositions = this.sparksGeometry.attributes.position.array;
+            
+            for (let i = 0; i < sparksCount; i++) {
+                const i3 = i * 3;
+                const vel = this.sparksVelocities[i];
+                
+                sparksPositions[i3] += vel.x;
+                sparksPositions[i3 + 1] += vel.y;
+                sparksPositions[i3 + 2] += vel.z;
+                
+                // Add gravity and air resistance
+                vel.y -= 0.005;
+                vel.x *= 0.98;
+                vel.y *= 0.98;
+                vel.z *= 0.98;
+            }
+            
+            this.sparksGeometry.attributes.position.needsUpdate = true;
+            
+            // Update smoke
+            const smokePositions = this.smokeGeometry.attributes.position.array;
+            
+            for (let i = 0; i < smokeCount; i++) {
+                const i3 = i * 3;
+                const vel = this.smokeVelocities[i];
+                
+                smokePositions[i3] += vel.x;
+                smokePositions[i3 + 1] += vel.y;
+                smokePositions[i3 + 2] += vel.z;
+                
+                // Gradually slow down
+                vel.x *= 0.99;
+                vel.y *= 0.99;
+                vel.z *= 0.99;
+            }
+            
+            this.smokeGeometry.attributes.position.needsUpdate = true;
+            
+            // Fade smoke
+            if (this.life < 30) {
+                this.smoke.material.opacity = this.life / 75;
+            }
+            
+            // Fade sparks
+            this.sparks.material.opacity = this.life / 40;
+            
+            // Decrease life
+            this.life--;
+            
+            // Remove when done
+            if (this.life <= 0) {
+                scene.remove(this.flash);
+                scene.remove(this.fire);
+                scene.remove(this.sparks);
+                scene.remove(this.smoke);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(explosionEffect);
+    
+    return explosionEffect;
+}
+
+// Create power-up/reward
+function createReward(x, z) {
+    // Create group
+    const rewardGroup = new THREE.Group();
+    
+    // Determine reward type
+    const types = [
+        { type: 'troops', color: 0xffff00, bonus: 10 },
+        { type: 'fusion', color: 0x00ffaa, bonus: 1 },
+        { type: 'shield', color: 0x0088ff, bonus: 3 } // Temporary shield
+    ];
+    
+    const rewardType = types[Math.floor(Math.random() * types.length)];
+    
+    // Create orb
+    const orbGeometry = new THREE.SphereGeometry(1, 16, 16);
+    const orbMaterial = new THREE.MeshPhongMaterial({
+        color: rewardType.color,
+        emissive: new THREE.Color(rewardType.color).multiplyScalar(0.5),
+        transparent: true,
+        opacity: 0.8,
+        shininess: 100
+    });
+    
+    const orb = new THREE.Mesh(orbGeometry, orbMaterial);
+    rewardGroup.add(orb);
+    
+    // Add glow
+    const glowGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+        color: rewardType.color,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.BackSide
+    });
+    
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    rewardGroup.add(glow);
+    
+    // Add symbol based on type
+    let symbol;
+    
+    switch(rewardType.type) {
+        case 'troops':
+            // Plus symbol
+            const plusGroup = new THREE.Group();
+            
+            const vbar = new THREE.Mesh(
+                new THREE.BoxGeometry(0.2, 1, 0.2),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            plusGroup.add(vbar);
+            
+            const hbar = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 0.2, 0.2),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            plusGroup.add(hbar);
+            
+            symbol = plusGroup;
+            break;
+            
+        case 'fusion':
+            // Star symbol
+            const starPoints = [];
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const radius = (i % 2 === 0) ? 0.7 : 0.3;
+                starPoints.push(new THREE.Vector2(
+                    Math.cos(angle) * radius,
+                    Math.sin(angle) * radius
+                ));
+            }
+            
+            const starShape = new THREE.Shape(starPoints);
+            const starGeometry = new THREE.ShapeGeometry(starShape);
+            const star = new THREE.Mesh(
+                starGeometry,
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            
+            star.rotation.x = -Math.PI / 2;
+            
+            symbol = star;
+            break;
+            
+        case 'shield':
+            // Shield symbol
+            const shieldGeometry = new THREE.CircleGeometry(0.5, 16);
+            const shield = new THREE.Mesh(
+                shieldGeometry,
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            
+            shield.rotation.x = -Math.PI / 2;
+            
+            symbol = shield;
+            break;
+    }
+    
+    if (symbol) {
+        symbol.position.z = 0.6;
+        rewardGroup.add(symbol);
+    }
+    
+    // Position reward
+    rewardGroup.position.set(x, 2, z);
+    
+    // Add to scene
+    scene.add(rewardGroup);
+    
+    // Add animation
+    const rewardAnimation = {
+        group: rewardGroup,
+        type: rewardType.type,
+        bonus: rewardType.bonus,
+        time: 0,
+        update: function() {
+            if (gamePaused) return true;
+            
+            // Move forward
+            this.group.position.z += 0.2;
+            
+            // Hovering and rotation
+            this.time += 0.05;
+            this.group.position.y = 2 + Math.sin(this.time) * 0.3;
+            this.group.rotation.y = this.time;
+            
+            // Check for collision with player
+            if (player && this.group.position.z > -2 && this.group.position.z < 2) {
+                const dx = this.group.position.x - player.position.x;
+                const dy = this.group.position.y - player.position.y;
+                const dz = this.group.position.z - player.position.z;
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                if (distance < 4) {
+                    // Apply reward effect
+                    applyReward(this.type, this.bonus);
+                    
+                    // Create effect
+                    createHitEffect(this.group.position.x, this.group.position.y, this.group.position.z);
+                    
+                    // Remove reward
+                    scene.remove(this.group);
+                    return false;
+                }
+            }
+            
+            // Remove if it goes too far
+            if (this.group.position.z > 15) {
+                scene.remove(this.group);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(rewardAnimation);
+    
+    return rewardGroup;
+}
+
+// Apply reward effect
+function applyReward(type, bonus) {
+    switch(type) {
+        case 'troops':
+            // Add troops
+            troops += bonus;
+            updateTroops();
+            break;
+            
+        case 'fusion':
+            // Increase fusion rate
+            fusionRate = Math.min(fusionRate + bonus, 10);
+            break;
+            
+        case 'shield':
+            // Create temporary shield
+            createPlayerShield(bonus);
+            break;
+    }
+    
+    // Update UI
+    updateUI();
+    
+    // Play reward sound
+    playSound('reward', { volume: 0.4 });
+}
+
+// Create player shield
+function createPlayerShield(duration) {
+    if (!player) return;
+    
+    // Create shield geometry
+    const shieldGeometry = new THREE.SphereGeometry(5, 16, 16);
+    const shieldMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00aaff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide
+    });
+    
+    const shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
+    player.add(shield);
+    
+    // Shield animation and duration
+    const shieldEffect = {
+        shield: shield,
+        player: player,
+        time: 0,
+        duration: duration * 10, // Convert to frames
+        immune: true, // Player is immune while shield is active
+        update: function() {
+            if (gamePaused) return true;
+            
+            // Rotate shield
+            this.shield.rotation.y += 0.02;
+            this.shield.rotation.x += 0.01;
+            
+            // Pulse effect
+            this.time += 0.1;
+            const scale = 1 + Math.sin(this.time) * 0.1;
+            this.shield.scale.set(scale, scale, scale);
+            
+            // Flash when about to expire
+            if (this.duration < 30) {
+                this.shield.material.opacity = (this.duration % 2 === 0) ? 0.4 : 0.2;
+            }
+            
+            // Decrease duration
+            this.duration--;
+            
+            // Remove when done
+            if (this.duration <= 0) {
+                this.player.remove(this.shield);
+                return false;
+            }
+            
+            return true;
+        }
+    };
+    
+    effectsToUpdate.push(shieldEffect);
+    
+    return shieldEffect;
+}
+
+// Play sound effect
+function playSound(name, options = {}) {
+    // Create audio context if not initialized
+    if (!audioContext) {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } catch(e) {
+            console.error('Web Audio API not supported');
+            return;
+        }
+    }
+    
+    // Define sounds using oscillators since we don't have actual sound files
+    switch(name) {
+        case 'laser':
+            playOscillator({ 
+                type: 'sawtooth', 
+                frequency: 880, 
+                duration: 0.1, 
+                volume: options.volume || 0.2
+            });
+            break;
+            
+        case 'explosion':
+            // White noise burst
+            playNoise({
+                duration: 0.3,
+                volume: options.volume || 0.3
+            });
+            break;
+            
+        case 'reward':
+            // Ascending notes
+            playOscillator({ 
+                type: 'sine', 
+                frequency: 440, 
+                duration: 0.1, 
+                volume: options.volume || 0.3
+            });
+            setTimeout(() => {
+                playOscillator({ 
+                    type: 'sine', 
+                    frequency: 660, 
+                    duration: 0.1, 
+                    volume: options.volume || 0.3
+                });
+            }, 100);
+            break;
+    }
+}
+
+// Play oscillator sound
+function playOscillator({ type, frequency, duration, volume }) {
+    if (!audioContext) return;
+    
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+    gainNode.gain.value = volume;
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.start();
+    
+    // Fade out
+    gainNode.gain.exponentialRampToValueAtTime(
+        0.001, audioContext.currentTime + duration
+    );
+    
+    // Stop
+    setTimeout(() => {
+        oscillator.stop();
+    }, duration * 1000);
+}
+
+// Play noise (for explosions)
+function playNoise({ duration, volume }) {
+    if (!audioContext) return;
+    
+    const bufferSize = audioContext.sampleRate * duration;
+    const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+    const data = buffer.getChannelData(0);
+    
+    // Fill buffer with noise
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+    
+    const noise = audioContext.createBufferSource();
+    noise.buffer = buffer;
+    
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = volume;
+    
+    // Apply lowpass filter for more explosion-like sound
+    const filter = audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 400;
+    
+    noise.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    noise.start();
+    
+    // Fade out
+    gainNode.gain.exponentialRampToValueAtTime(
+        0.001, audioContext.currentTime + duration
+    );
+    
+    // Stop
+    setTimeout(() => {
+        noise.stop();
+    }, duration * 1000);
+}
+
+// Find and kill the highest level troop
+function killHighestLevelTroop() {
+    // Only if there are troops
+    if (troopMeshes.length === 0) return;
+    
+    // Find highest level troop
+    let highestLevel = -1;
+    let highestIndex = -1;
+    
+    for (let i = 0; i < troopMeshes.length; i++) {
+        if (troopMeshes[i].level > highestLevel) {
+            highestLevel = troopMeshes[i].level;
+            highestIndex = i;
+        }
+    }
+    
+    if (highestIndex >= 0) {
+        // Create explosion at troop's position
+        createExplosionEffect(
+            troopMeshes[highestIndex].position.x,
+            troopMeshes[highestIndex].position.y,
+            troopMeshes[highestIndex].position.z
+        );
+        
+        // Remove troop from scene
+        scene.remove(troopMeshes[highestIndex]);
+        troopMeshes.splice(highestIndex, 1);
+        
+        // Recalculate troops count based on remaining troops
+        let newTroops = 0;
+        
+        for (let i = 0; i < troopMeshes.length; i++) {
+            const level = troopMeshes[i].level;
+            
+            // Calculate troops value based on level
+            switch(level) {
+                case 0: newTroops += 1; break;
+                case 1: newTroops += 5; break;
+                case 2: newTroops += 10; break;
+                case 3: newTroops += 20; break;
+                case 4: newTroops += 50; break;
+                case 5: newTroops += 100; break;
+                case 6: newTroops += 150; break;
+                case 7: newTroops += 200; break;
+                case 8: newTroops += 300; break;
+                case 9: newTroops += 500; break;
+            }
+        }
+        
+        // Update troops count
+        troops = Math.max(newTroops, 1);
+        
+        // If all troops are gone, reset to 1
+        if (troopMeshes.length === 0) {
+            troops = 1;
+            updateTroops();
+        }
+        
+        // Update UI
+        updateUI();
+        
+        // Check for game over
+        checkGameOver();
+    }
 }
 
 // Expose functions to global scope
