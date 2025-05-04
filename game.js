@@ -245,51 +245,76 @@ class Game {
         this.joystick.value = { x: 0, y: 0 };
     }
     
-    setupPlayer() {
-        // Créer un groupe pour le joueur et ses soldats
-        this.objects.player = new THREE.Group();
-        this.objects.player.position.set(0, 0, 0);
+setupPlayer() {
+    // Créer un groupe pour le joueur et ses soldats
+    this.objects.player = new THREE.Group();
+    this.objects.player.position.set(0, 0, 0);
+    
+    // Au lieu de CapsuleGeometry, utiliser une combinaison de formes
+    const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x3366ff });
+    
+    // Créer plusieurs soldats en formation
+    const formation = [
+        { x: 0, z: 0 },    // Leader au centre
+        { x: -1, z: 0 },   // Soldats à gauche
+        { x: 1, z: 0 },    // Soldats à droite
+        { x: -0.5, z: 1 }, // Rangée derrière
+        { x: 0.5, z: 1 },
+        { x: -1.5, z: 1 },
+        { x: 1.5, z: 1 },
+        { x: -1, z: 2 },   // Dernière rangée
+        { x: 0, z: 2 },
+        { x: 1, z: 2 },
+    ];
+    
+    for (const pos of formation) {
+        // Créer un groupe pour chaque soldat
+        const soldier = new THREE.Group();
+        soldier.position.set(pos.x, 0.75, pos.z);
         
-        // Créer le modèle du joueur (pour maintenant, une simple forme)
-        const playerGeometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x3366ff });
+        // Corps (cylindre)
+        const bodyGeometry = new THREE.CylinderGeometry(0.25, 0.25, 1, 8);
+        const body = new THREE.Mesh(bodyGeometry, playerMaterial);
+        body.position.y = 0;
+        body.castShadow = true;
+        soldier.add(body);
         
-        // Créer plusieurs soldats en formation
-        const formation = [
-            { x: 0, z: 0 },    // Leader au centre
-            { x: -1, z: 0 },   // Soldats à gauche
-            { x: 1, z: 0 },    // Soldats à droite
-            { x: -0.5, z: 1 }, // Rangée derrière
-            { x: 0.5, z: 1 },
-            { x: -1.5, z: 1 },
-            { x: 1.5, z: 1 },
-            { x: -1, z: 2 },   // Dernière rangée
-            { x: 0, z: 2 },
-            { x: 1, z: 2 },
-        ];
+        // Tête (sphère)
+        const headGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+        const head = new THREE.Mesh(headGeometry, playerMaterial);
+        head.position.y = 0.65;
+        head.castShadow = true;
+        soldier.add(head);
         
-        for (const pos of formation) {
-            const soldier = new THREE.Mesh(playerGeometry, playerMaterial);
-            soldier.position.set(pos.x, 0.75, pos.z);
-            soldier.castShadow = true;
-            
-            // Ajouter un chapeau bleu
-            const hatGeometry = new THREE.SphereGeometry(0.3, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-            const hatMaterial = new THREE.MeshStandardMaterial({ color: 0x3399ff });
-            const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-            hat.position.y = 0.7;
-            soldier.add(hat);
-            
-            // Ajouter une arme
-            const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
-            const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-            const gun = new THREE.Mesh(gunGeometry, gunMaterial);
-            gun.position.set(0.3, 0.2, -0.4);
-            soldier.add(gun);
-            
-            // Ajouter au groupe principal
-            this.objects.player.add(soldier);
-        }
+        // Ajouter un chapeau bleu
+        const hatGeometry = new THREE.SphereGeometry(0.3, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+        const hatMaterial = new THREE.MeshStandardMaterial({ color: 0x3399ff });
+        const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+        hat.position.y = 0.85;
+        soldier.add(hat);
+        
+        // Ajouter une arme
+        const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
+        const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const gun = new THREE.Mesh(gunGeometry, gunMaterial);
+        gun.position.set(0.3, 0.2, -0.4);
+        soldier.add(gun);
+        
+        // Ajouter au groupe principal
+        this.objects.player.add(soldier);
+    }
+    
+    // Définir les propriétés du joueur
+    this.objects.player.health = GAME_CONFIG.playerHealth;
+    this.objects.player.damage = 10;
+    this.objects.player.shootRate = GAME_CONFIG.playerShootRate;
+    
+    // Ajouter à la scène
+    this.scene.add(this.objects.player);
+    
+    // Créer un collider pour le joueur
+    this.objects.player.collider = new THREE.Box3().setFromObject(this.objects.player);
+}
         
         // Définir les propriétés du joueur
         this.objects.player.health = GAME_CONFIG.playerHealth;
@@ -315,58 +340,67 @@ class Game {
         }
     }
     
-    createEnemyForPool(type) {
-        const enemyConfig = GAME_CONFIG.enemyTypes[type];
-        
-        // Groupe pour l'ennemi
-        const enemy = new THREE.Group();
-        
-        // Corps principal
-        const bodyGeometry = new THREE.CapsuleGeometry(0.5 * enemyConfig.scale, 1 * enemyConfig.scale, 4, 8);
-        const bodyMaterial = new THREE.MeshStandardMaterial({ color: enemyConfig.color });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.y = 0.75 * enemyConfig.scale;
-        body.castShadow = true;
-        enemy.add(body);
-        
-        // Chapeau rouge
-        const hatGeometry = new THREE.SphereGeometry(0.3 * enemyConfig.scale, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2);
-        const hatMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        const hat = new THREE.Mesh(hatGeometry, hatMaterial);
-        hat.position.y = 0.7 * enemyConfig.scale;
-        body.add(hat);
-        
-        // Ajouter une arme si c'est un tireur
-        if (enemyConfig.shootsBack) {
-            const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
-            const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
-            const gun = new THREE.Mesh(gunGeometry, gunMaterial);
-            gun.position.set(0.3, 0.2, 0.4);
-            body.add(gun);
-        }
-        
-        // Propriétés de l'ennemi
-        enemy.type = type;
-        enemy.health = enemyConfig.health;
-        enemy.maxHealth = enemyConfig.health;
-        enemy.damage = enemyConfig.damage;
-        enemy.speed = enemyConfig.speed;
-        enemy.points = enemyConfig.points;
-        enemy.shootsBack = enemyConfig.shootsBack;
-        enemy.lastShot = 0;
-        enemy.shootRate = enemyConfig.shootRate || 0;
-        enemy.active = false;
-        enemy.scale = enemyConfig.scale;
-        
-        // Cacher l'ennemi
-        enemy.visible = false;
-        
-        // Ajouter à la scène et au pool
-        this.scene.add(enemy);
-        this.enemyPool.push(enemy);
-        
-        return enemy;
+createEnemyForPool(type) {
+    const enemyConfig = GAME_CONFIG.enemyTypes[type];
+    
+    // Groupe pour l'ennemi
+    const enemy = new THREE.Group();
+    
+    // Corps principal - Remplacer CapsuleGeometry par une combinaison
+    // Corps (cylindre)
+    const bodyGeometry = new THREE.CylinderGeometry(0.25 * enemyConfig.scale, 0.25 * enemyConfig.scale, 1 * enemyConfig.scale, 8);
+    const bodyMaterial = new THREE.MeshStandardMaterial({ color: enemyConfig.color });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 0;
+    body.castShadow = true;
+    enemy.add(body);
+    
+    // Tête (sphère)
+    const headGeometry = new THREE.SphereGeometry(0.3 * enemyConfig.scale, 8, 8);
+    const headMaterial = new THREE.MeshStandardMaterial({ color: enemyConfig.color });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.y = 0.65 * enemyConfig.scale;
+    head.castShadow = true;
+    enemy.add(head);
+    
+    // Chapeau rouge
+    const hatGeometry = new THREE.SphereGeometry(0.3 * enemyConfig.scale, 8, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const hatMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+    const hat = new THREE.Mesh(hatGeometry, hatMaterial);
+    hat.position.y = 0.85 * enemyConfig.scale;
+    head.add(hat);
+    
+    // Ajouter une arme si c'est un tireur
+    if (enemyConfig.shootsBack) {
+        const gunGeometry = new THREE.BoxGeometry(0.1, 0.1, 0.5);
+        const gunMaterial = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        const gun = new THREE.Mesh(gunGeometry, gunMaterial);
+        gun.position.set(0.3, 0.2, 0.4);
+        head.add(gun);
     }
+    
+    // Propriétés de l'ennemi
+    enemy.type = type;
+    enemy.health = enemyConfig.health;
+    enemy.maxHealth = enemyConfig.health;
+    enemy.damage = enemyConfig.damage;
+    enemy.speed = enemyConfig.speed;
+    enemy.points = enemyConfig.points;
+    enemy.shootsBack = enemyConfig.shootsBack;
+    enemy.lastShot = 0;
+    enemy.shootRate = enemyConfig.shootRate || 0;
+    enemy.active = false;
+    enemy.scale = enemyConfig.scale;
+    
+    // Cacher l'ennemi
+    enemy.visible = false;
+    
+    // Ajouter à la scène et au pool
+    this.scene.add(enemy);
+    this.enemyPool.push(enemy);
+    
+    return enemy;
+}
     
     setupProjectiles() {
         // Pool de projectiles
